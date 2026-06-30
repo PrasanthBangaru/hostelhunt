@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "58003585008",
+    "firebase_url": "https://project-1-c7b44-default-rtdb.firebaseio.com",
+    "project_id": "project-1-c7b44",
+    "storage_bucket": "project-1-c7b44.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:58003585008:android:b00b042dd1275c77c58f35",
+        "android_client_info": {
+          "package_name": "com.example.hostel_hunt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARyq4J81kMCtSzB1DIY9E4gi71_jO09lc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
