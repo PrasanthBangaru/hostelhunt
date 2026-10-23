@@ -68,6 +68,8 @@ class HostelCard extends StatelessWidget {
   final double longitude;
   final double foodRating;
   final Map<String, dynamic>? foodMenu;
+  final double rating;
+  final int reviewCount;
 
   const HostelCard({
     super.key,
@@ -87,6 +89,8 @@ class HostelCard extends StatelessWidget {
     this.longitude = 0.0,
     this.foodRating = 4.6,
     this.foodMenu,
+    this.rating = 4.5,
+    this.reviewCount = 0,
   });
 
   static const List<String> _weekDays = [
@@ -160,12 +164,53 @@ class HostelCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              hostelName,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    hostelName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        rating.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                      if (reviewCount > 0) ...[
+                        const SizedBox(width: 3),
+                        Text(
+                          "($reviewCount)",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.amber.shade800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text("🏫 College : $collegeName"),
@@ -419,6 +464,8 @@ class HostelCard extends StatelessWidget {
                         longitude: longitude,
                         foodRating: foodRating,
                         foodMenu: foodMenu,
+                        rating: rating,
+                        reviewCount: reviewCount,
                       ),
                     ),
                   );
@@ -944,6 +991,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                                       hostelType: h.hostelType,
                                       distanceFromCollege: h.distanceFromCollege,
                                       managerId: h.managerId,
+                                      rating: h.rating,
                                     ),
                                   ),
                                 );
@@ -1079,6 +1127,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                         longitude: (data["longitude"] as num?)?.toDouble() ?? 0.0,
                         foodRating: (data["foodRating"] as num?)?.toDouble() ?? 4.6,
                         foodMenu: data["foodMenu"] as Map<String, dynamic>?,
+                        rating: (data["rating"] as num?)?.toDouble() ?? 4.5,
+                        reviewCount: (data["reviewCount"] as num?)?.toInt() ?? 0,
                       );
                     },
                   ),
@@ -1155,6 +1205,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     address: h["address"] ?? "",
                     latitude: lat,
                     longitude: lng,
+                    rating: (h["rating"] as num?)?.toDouble() ?? 4.5,
+                    reviewCount: (h["reviewCount"] as num?)?.toInt() ?? 0,
                   ),
                 ),
               );
@@ -1285,6 +1337,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                                 address: h["address"] ?? "",
                                 latitude: lat,
                                 longitude: lng,
+                                rating: (h["rating"] as num?)?.toDouble() ?? 4.5,
+                                reviewCount: (h["reviewCount"] as num?)?.toInt() ?? 0,
                               ),
                             ),
                           );

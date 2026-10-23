@@ -78,6 +78,8 @@ class HostelDetailsScreen extends StatefulWidget {
   final double longitude;
   final double foodRating;
   final Map<String, dynamic>? foodMenu;
+  final double rating;
+  final int reviewCount;
 
   const HostelDetailsScreen({
     super.key,
@@ -97,6 +99,8 @@ class HostelDetailsScreen extends StatefulWidget {
     this.longitude = 0.0,
     this.foodRating = 4.6,
     this.foodMenu,
+    this.rating = 4.5,
+    this.reviewCount = 0,
   });
 
   @override
@@ -332,6 +336,15 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please write a review comment.')));
       return;
     }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to submit a rating and review.')),
+      );
+      return;
+    }
+
     setState(() => _isSubmittingReview = true);
 
     try {
@@ -339,11 +352,23 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       final sentiment = sentimentData['sentiment'] as String;
       final score = sentimentData['score'] as double;
 
-      final user = FirebaseAuth.instance.currentUser;
+      String studentName = user.displayName ?? '';
+      if (studentName.trim().isEmpty) {
+        try {
+          final uDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          if (uDoc.exists) {
+            studentName = (uDoc.data()?['name'] ?? uDoc.data()?['displayName'] ?? '').toString();
+          }
+        } catch (_) {}
+      }
+      if (studentName.trim().isEmpty) {
+        studentName = user.email?.split('@').first ?? 'Student';
+      }
+
       final review = ReviewModel(
         hostelId: widget.hostelId,
-        studentName: user?.displayName ?? user?.email?.split('@').first ?? 'Anonymous',
-        studentId: user?.uid ?? '',
+        studentName: studentName,
+        studentId: user.uid,
         rating: _reviewRating,
         comment: comment,
         timestamp: DateTime.now(),
@@ -351,11 +376,37 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         sentimentScore: score,
       );
 
+      // 1. Add review to subcollection
       await FirebaseFirestore.instance
           .collection('hostels')
           .doc(widget.hostelId)
           .collection('reviews')
           .add(review.toMap());
+
+      // 2. Recalculate average rating & review count live across all reviews
+      final allReviewsSnap = await FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(widget.hostelId)
+          .collection('reviews')
+          .get();
+
+      double totalRating = 0.0;
+      for (var doc in allReviewsSnap.docs) {
+        final r = (doc.data()['rating'] as num?)?.toDouble() ?? 0.0;
+        totalRating += r;
+      }
+      final int count = allReviewsSnap.docs.length;
+      final double avgRating = count > 0 ? (totalRating / count) : _reviewRating;
+      final double finalRating = double.parse(avgRating.toStringAsFixed(1));
+
+      // 3. Update the hostel document live so student cards and headers update in real time
+      await FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(widget.hostelId)
+          .update({
+            'rating': finalRating,
+            'reviewCount': count,
+          });
 
       _reviewController.clear();
 
@@ -368,7 +419,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Review submitted! Sentiment: ${_sentimentEmoji ?? sentiment}'),
+          content: Text('Review submitted! Rated ${_reviewRating.toStringAsFixed(1)} ★ • Sentiment: ${_sentimentEmoji ?? sentiment}'),
           backgroundColor: sentiment == 'positive' ? Colors.green : sentiment == 'negative' ? Colors.red : Colors.orange,
         ),
       );
@@ -376,6 +427,49 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       setState(() => _isSubmittingReview = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _deleteReview(String reviewId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(widget.hostelId)
+          .collection('reviews')
+          .doc(reviewId)
+          .delete();
+
+      // Recalculate average rating live
+      final allReviewsSnap = await FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(widget.hostelId)
+          .collection('reviews')
+          .get();
+
+      double totalRating = 0.0;
+      for (var doc in allReviewsSnap.docs) {
+        final r = (doc.data()['rating'] as num?)?.toDouble() ?? 0.0;
+        totalRating += r;
+      }
+      final int count = allReviewsSnap.docs.length;
+      final double avgRating = count > 0 ? (totalRating / count) : 4.5;
+      final double finalRating = double.parse(avgRating.toStringAsFixed(1));
+
+      await FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(widget.hostelId)
+          .update({
+            'rating': finalRating,
+            'reviewCount': count,
+          });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Review removed')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete review: $e')));
     }
   }
 
@@ -420,6 +514,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         final double liveFoodRating = (liveData?['foodRating'] as num?)?.toDouble() ?? widget.foodRating;
         final Map<String, dynamic>? liveFoodMenu = (liveData?['foodMenu'] as Map<String, dynamic>?) ?? widget.foodMenu;
         final int liveVacancy = (liveData?['vacancy'] as num?)?.toInt() ?? widget.vacancy;
+        final double liveRating = (liveData?['rating'] as num?)?.toDouble() ?? widget.rating;
+        final int liveReviewCount = (liveData?['reviewCount'] as num?)?.toInt() ?? widget.reviewCount;
 
         return Scaffold(
           appBar: AppBar(
@@ -498,9 +594,50 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.hostelName,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.hostelName,
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.shade300, width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star, color: Colors.amber, size: 20),
+                            const SizedBox(width: 4),
+                            Text(
+                              liveRating.toStringAsFixed(1),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                            if (liveReviewCount > 0) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                "($liveReviewCount)",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.amber.shade900.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Row(children: [
@@ -906,13 +1043,12 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Reviews List from Firestore
+                  // Reviews List from Firestore (Live Real-Time)
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('hostels')
                         .doc(widget.hostelId)
                         .collection('reviews')
-                        .orderBy('timestamp', descending: true)
                         .snapshots(),
                     builder: (context, snap) {
                       if (!snap.hasData || snap.data!.docs.isEmpty) {
@@ -932,9 +1068,16 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           .map((d) => ReviewModel.fromMap(d.data() as Map<String, dynamic>, d.id))
                           .toList();
 
+                      // Client-side sort ensures instant real-time reactivity without composite index requirements
+                      reviews.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
                       int pos = reviews.where((r) => r.sentiment == 'positive').length;
                       int neg = reviews.where((r) => r.sentiment == 'negative').length;
                       int neu = reviews.where((r) => r.sentiment == 'neutral').length;
+
+                      final double avgRating = reviews.isNotEmpty
+                          ? reviews.fold(0.0, (acc, r) => acc + r.rating) / reviews.length
+                          : 0.0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -954,9 +1097,37 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text("${reviews.length} Reviews • Sentiment Breakdown",
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold, fontSize: 14)),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("${reviews.length} Reviews • Sentiment Breakdown",
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold, fontSize: 14)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.amber.shade200),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.star, color: Colors.amber, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            "${avgRating.toStringAsFixed(1)} / 5",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: Colors.amber.shade900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 10),
                                 Row(
                                   children: [
@@ -1058,6 +1229,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   Widget _buildReviewCard(ReviewModel review) {
     final color = _sentimentColor(review.sentiment);
     final icon = _sentimentIcon(review.sentiment);
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final isMe = currentUid != null && currentUid == review.studentId;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -1072,11 +1246,11 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.blue.shade100,
+                backgroundColor: isMe ? Colors.green.shade100 : Colors.blue.shade100,
                 radius: 18,
                 child: Text(
                   review.studentName.isNotEmpty ? review.studentName[0].toUpperCase() : '?',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: isMe ? Colors.green.shade800 : Colors.blue),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1084,17 +1258,49 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(review.studentName,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                     Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < review.rating ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 14,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            review.studentName,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                        if (isMe) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Text(
+                              "You",
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        ...List.generate(
+                          5,
+                          (i) => Icon(
+                            i < review.rating ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
+                            size: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "${review.rating.toStringAsFixed(1)} ★",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1118,6 +1324,16 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   ],
                 ),
               ),
+              if (isMe && review.reviewId != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: "Delete your review",
+                  onPressed: () => _deleteReview(review.reviewId!),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
