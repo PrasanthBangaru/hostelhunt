@@ -49,6 +49,129 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
   // Editable costs for each extra facility
   Map<String, TextEditingController> extraCostControllers = {};
 
+  double foodRating = 4.6;
+  int _selectedMenuDayIndex = 0;
+
+  static const List<String> _weekDays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+  ];
+
+  final Map<String, Map<String, TextEditingController>> _menuControllers = {};
+
+  static const Map<String, Map<String, String>> _defaultWeeklyMenu = {
+    'Monday': {
+      'breakfast': 'Idly + Sambar + Chutney',
+      'lunch': 'Rice + Dal Tadka + Veg Curry + Curd',
+      'dinner': 'Soft Chapathi + Paneer Butter Masala',
+      'special': 'Paneer Delight',
+    },
+    'Tuesday': {
+      'breakfast': 'Poori + Aloo Masala',
+      'lunch': 'Rice + Tomato Sambar + Bhindi Fry + Buttermilk',
+      'dinner': 'Hot Phulka + Mixed Veg Korma',
+      'special': 'Home Style Curry',
+    },
+    'Wednesday': {
+      'breakfast': 'Poha / Upma + Peanut Chutney',
+      'lunch': 'Jeera Rice + Rajma Masala + Salad',
+      'dinner': 'Veg Fried Rice + Veg/Chicken Manchurian',
+      'special': '⭐ Indo-Chinese Feast',
+    },
+    'Thursday': {
+      'breakfast': 'Crispy Masala Dosa + Sambar',
+      'lunch': 'Rice + Spinach Dal + Raw Banana Fry + Curd',
+      'dinner': 'Chapathi + Egg Curry / Paneer Bhurji',
+      'special': 'Crispy Dosa Night',
+    },
+    'Friday': {
+      'breakfast': 'Ghee Pongal + Medu Vada + Sambar',
+      'lunch': 'Steamed Rice + Chole Masala + Cucumber Raita',
+      'dinner': 'Soft Rotis + Mushroom Curry + Gulab Jamun',
+      'special': 'Sweet Friday Treat',
+    },
+    'Saturday': {
+      'breakfast': 'Aloo Paratha + Fresh Butter + Curd',
+      'lunch': 'South Indian Thali (Rice, Rasam, Dal, Poriyal)',
+      'dinner': 'Veg Pulao + Mirchi Ka Salan + Raita',
+      'special': 'Pulao Night',
+    },
+    'Sunday': {
+      'breakfast': 'Chole Bhature / Onion Uttapam',
+      'lunch': 'Hyderabadi Dum Biryani (Chicken / Paneer) + Raitha',
+      'dinner': 'Light Phulka + Yellow Dal Tadka',
+      'special': '🔥 Grand Sunday Biryani Feast',
+    },
+  };
+
+  void _initMenuControllers(Map<String, dynamic>? existingMenu) {
+    _defaultWeeklyMenu.forEach((day, defaultMeals) {
+      final Map<String, dynamic>? dayMap = existingMenu != null && existingMenu[day] != null
+          ? existingMenu[day] as Map<String, dynamic>
+          : null;
+
+      _menuControllers[day] = {
+        'breakfast': TextEditingController(
+          text: dayMap?['breakfast']?.toString() ?? defaultMeals['breakfast'],
+        ),
+        'lunch': TextEditingController(
+          text: dayMap?['lunch']?.toString() ?? defaultMeals['lunch'],
+        ),
+        'dinner': TextEditingController(
+          text: dayMap?['dinner']?.toString() ?? defaultMeals['dinner'],
+        ),
+        'special': TextEditingController(
+          text: dayMap?['special']?.toString() ?? defaultMeals['special'],
+        ),
+      };
+    });
+  }
+
+  void _applyMenuPreset(String preset) {
+    setState(() {
+      if (preset == 'south') {
+        _menuControllers['Monday']!['breakfast']!.text = 'Idly + Sambar + Chutney';
+        _menuControllers['Monday']!['lunch']!.text = 'Rice + Sambar + Poriyal + Curd';
+        _menuControllers['Monday']!['dinner']!.text = 'Chapathi + Kurma + Rice';
+        _menuControllers['Wednesday']!['dinner']!.text = 'Lemon Rice + Curd Rice + Potato Roast';
+        _menuControllers['Friday']!['breakfast']!.text = 'Ghee Pongal + Medu Vada + Chutney';
+        _menuControllers['Sunday']!['lunch']!.text = 'South Indian Biryani / Thali Special';
+      } else if (preset == 'north') {
+        _menuControllers['Monday']!['breakfast']!.text = 'Aloo Paratha + Dahi + Pickle';
+        _menuControllers['Monday']!['lunch']!.text = 'Rice + Dal Makhani + Paneer';
+        _menuControllers['Monday']!['dinner']!.text = 'Roti + Mixed Veg + Jeera Rice';
+        _menuControllers['Wednesday']!['lunch']!.text = 'Rajma Chawal + Boondi Raita';
+        _menuControllers['Sunday']!['breakfast']!.text = 'Chole Bhature + Lassi';
+        _menuControllers['Sunday']!['lunch']!.text = 'Paneer / Chicken Pulao + Raita';
+      } else {
+        _defaultWeeklyMenu.forEach((day, meals) {
+          _menuControllers[day]!['breakfast']!.text = meals['breakfast']!;
+          _menuControllers[day]!['lunch']!.text = meals['lunch']!;
+          _menuControllers[day]!['dinner']!.text = meals['dinner']!;
+          _menuControllers[day]!['special']!.text = meals['special']!;
+        });
+      }
+    });
+  }
+
+  Map<String, Map<String, String>> get _foodMenuData {
+    Map<String, Map<String, String>> data = {};
+    _menuControllers.forEach((day, controllers) {
+      data[day] = {
+        'breakfast': controllers['breakfast']!.text.trim().isNotEmpty
+            ? controllers['breakfast']!.text.trim()
+            : 'Idly + Sambar',
+        'lunch': controllers['lunch']!.text.trim().isNotEmpty
+            ? controllers['lunch']!.text.trim()
+            : 'Rice + Curry',
+        'dinner': controllers['dinner']!.text.trim().isNotEmpty
+            ? controllers['dinner']!.text.trim()
+            : 'Chapathi + Paneer',
+        'special': controllers['special']!.text.trim(),
+      };
+    });
+    return data;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +192,12 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
     // Parse distance from college and hostel type
     distance.text = (data["distanceFromCollege"] ?? "0.0").toString();
     selectedHostelType = (data["hostelType"] ?? "Co-Ed").toString();
+
+    // Food rating & food menu
+    if (data["foodRating"] != null) {
+      foodRating = (data["foodRating"] as num).toDouble();
+    }
+    _initMenuControllers(data["foodMenu"] as Map<String, dynamic>?);
 
     // Parse facilities
     final List<dynamic> facilities = data["facilities"] ?? [];
@@ -105,6 +234,11 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
     distance.dispose();
     for (var c in extraCostControllers.values) {
       c.dispose();
+    }
+    for (var dayMap in _menuControllers.values) {
+      for (var c in dayMap.values) {
+        c.dispose();
+      }
     }
     super.dispose();
   }
@@ -400,6 +534,11 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
 
             const SizedBox(height: 25),
 
+            // 🍽️ Weekly Food Menu & Rating Configuration
+            _buildWeeklyFoodMenuEditor(),
+
+            const SizedBox(height: 25),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -418,6 +557,8 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
                     "facilityCosts": _facilityCosts,
                     "hostelType": selectedHostelType,
                     "distanceFromCollege": double.tryParse(distance.text) ?? 0.0,
+                    "foodRating": foodRating,
+                    "foodMenu": _foodMenuData,
                   };
 
                   await FirebaseFirestore.instance
@@ -429,7 +570,7 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text("Hostel Updated Successfully"),
+                      content: Text("Hostel & Food Menu Updated Successfully"),
                     ),
                   );
 
@@ -440,6 +581,207 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyFoodMenuEditor() {
+    final activeDay = _weekDays[_selectedMenuDayIndex];
+    final activeControllers = _menuControllers[activeDay]!;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.shade200, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.restaurant_menu, color: Colors.deepOrange, size: 22),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Weekly Food Menu & Rating",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      "Updates reflect instantly in real time on student apps",
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Mess Food Rating",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade600,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.amberAccent, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${foodRating.toStringAsFixed(1)} / 5.0",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: foodRating,
+            min: 1.0,
+            max: 5.0,
+            divisions: 40,
+            activeColor: Colors.orange,
+            inactiveColor: Colors.orange.shade100,
+            label: foodRating.toStringAsFixed(1),
+            onChanged: (val) {
+              setState(() {
+                foodRating = val;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+
+          const Text(
+            "⚡ Quick Fill Presets:",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.auto_fix_high, size: 16, color: Colors.deepOrange),
+                label: const Text("South Indian Menu"),
+                onPressed: () => _applyMenuPreset('south'),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.auto_fix_high, size: 16, color: Colors.orange),
+                label: const Text("North Indian Menu"),
+                onPressed: () => _applyMenuPreset('north'),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.refresh, size: 16, color: Colors.blue),
+                label: const Text("Standard Menu"),
+                onPressed: () => _applyMenuPreset('standard'),
+              ),
+            ],
+          ),
+          const Divider(height: 25),
+
+          Text(
+            "Configure Meals for: $activeDay",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _weekDays.length,
+              itemBuilder: (context, i) {
+                final day = _weekDays[i];
+                final isSelected = _selectedMenuDayIndex == i;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6.0),
+                  child: ChoiceChip(
+                    label: Text(day.substring(0, 3)),
+                    selected: isSelected,
+                    selectedColor: Colors.orange,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    onSelected: (val) {
+                      if (val) {
+                        setState(() {
+                          _selectedMenuDayIndex = i;
+                        });
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: activeControllers['breakfast'],
+            decoration: InputDecoration(
+              labelText: "$activeDay Breakfast",
+              hintText: "e.g. Idly + Sambar + Chutney",
+              prefixIcon: const Icon(Icons.wb_sunny_outlined, color: Colors.amber),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: activeControllers['lunch'],
+            decoration: InputDecoration(
+              labelText: "$activeDay Lunch",
+              hintText: "e.g. Rice + Dal Tadka + Veg Curry + Curd",
+              prefixIcon: const Icon(Icons.wb_sunny, color: Colors.orange),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: activeControllers['dinner'],
+            decoration: InputDecoration(
+              labelText: "$activeDay Dinner",
+              hintText: "e.g. Chapathi + Paneer Butter Masala",
+              prefixIcon: const Icon(Icons.nightlight_round, color: Colors.indigo),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: activeControllers['special'],
+            decoration: InputDecoration(
+              labelText: "$activeDay Special (Optional)",
+              hintText: "e.g. Chef's Sunday Biryani / Sweet Gulab Jamun",
+              prefixIcon: const Icon(Icons.stars, color: Colors.amber),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -201,9 +201,10 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     },
   };
 
-  Map<String, String> _getMealForDay(String day) {
-    if (widget.foodMenu != null && widget.foodMenu![day] != null) {
-      final raw = widget.foodMenu![day] as Map<String, dynamic>;
+  Map<String, String> _getMealForDay(String day, [Map<String, dynamic>? activeFoodMenu]) {
+    final menuSource = activeFoodMenu ?? widget.foodMenu;
+    if (menuSource != null && menuSource[day] != null) {
+      final raw = menuSource[day] as Map<String, dynamic>;
       return {
         'breakfast': raw['breakfast']?.toString() ?? 'Idly + Sambar',
         'lunch': raw['lunch']?.toString() ?? 'Rice + Dal + Veg Curry',
@@ -409,11 +410,22 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     final bool isOverpriced = priceDiff > 500;
     final bool isUnderpriced = priceDiff < -500;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.hostelName),
-        centerTitle: true,
-      ),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('hostels').doc(widget.hostelId).snapshots(),
+      builder: (context, snapshot) {
+        final Map<String, dynamic>? liveData = (snapshot.hasData && snapshot.data!.exists)
+            ? snapshot.data!.data() as Map<String, dynamic>?
+            : null;
+
+        final double liveFoodRating = (liveData?['foodRating'] as num?)?.toDouble() ?? widget.foodRating;
+        final Map<String, dynamic>? liveFoodMenu = (liveData?['foodMenu'] as Map<String, dynamic>?) ?? widget.foodMenu;
+        final int liveVacancy = (liveData?['vacancy'] as num?)?.toInt() ?? widget.vacancy;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(widget.hostelName),
+            centerTitle: true,
+          ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -500,7 +512,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   Row(children: [
                     const Icon(Icons.bed, color: Colors.grey, size: 20),
                     const SizedBox(width: 8),
-                    Text("${widget.vacancy} Beds Available", style: const TextStyle(fontSize: 16, color: Colors.black54)),
+                    Text("$liveVacancy Beds Available", style: const TextStyle(fontSize: 16, color: Colors.black54)),
                   ]),
                   const SizedBox(height: 8),
                   Row(children: [
@@ -690,7 +702,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                   const SizedBox(height: 30),
 
                   // 🍽️ Weekly Food Menu Predictor
-                  _buildFoodMenuSection(),
+                  _buildFoodMenuSection(liveFoodRating, liveFoodMenu),
 
                   const SizedBox(height: 30),
 
@@ -1016,6 +1028,8 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
         ),
       ),
     );
+  },
+);
   }
 
   Widget _buildSentimentBar(String label, int count, int total, Color color) {
@@ -1113,13 +1127,13 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     );
   }
 
-  Widget _buildFoodMenuSection() {
+  Widget _buildFoodMenuSection(double currentFoodRating, Map<String, dynamic>? currentFoodMenu) {
     final int todayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
     final String todayName = _weekDays[todayIndex];
-    final todayMenu = _getMealForDay(todayName);
+    final todayMenu = _getMealForDay(todayName, currentFoodMenu);
 
     final selectedDayName = _weekDays[_selectedFoodDayIndex];
-    final selectedMenu = _getMealForDay(selectedDayName);
+    final selectedMenu = _getMealForDay(selectedDayName, currentFoodMenu);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1189,7 +1203,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       Row(
                         children: [
                           Text(
-                            widget.foodRating.toStringAsFixed(1),
+                            currentFoodRating.toStringAsFixed(1),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 32,
