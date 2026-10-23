@@ -151,7 +151,6 @@ class _ChatScreenState extends State<ChatScreen> {
       updateData['offerSenderId'] = user.uid;
     } else if (type == 'offer_accepted') {
       updateData['dealStatus'] = 'deal_closed';
-      // keep currentOfferPrice as the closed deal price
     } else if (type == 'offer_rejected') {
       updateData['dealStatus'] = 'deal_rejected';
       updateData['currentOfferPrice'] = null;
@@ -450,7 +449,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             bottomRight: Radius.circular(isMe ? 4 : 16),
                           ),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))
                           ],
                         ),
                         child: Column(
@@ -482,7 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, -2))
+                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))
               ],
             ),
             child: SafeArea(
@@ -654,3 +653,5 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
+typedef ChatPage = ChatScreen;

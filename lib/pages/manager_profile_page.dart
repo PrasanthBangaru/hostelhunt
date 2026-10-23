@@ -1,9 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-import '../auth/login_screen.dart';
-
+import 'login_page.dart';
 
 class ManagerProfileScreen extends StatelessWidget {
   const ManagerProfileScreen({super.key});
@@ -77,7 +75,7 @@ class ManagerProfileScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
+                            color: Colors.white.withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -129,7 +127,7 @@ class ManagerProfileScreen extends StatelessWidget {
                               boxShadow: [
                                 BoxShadow(
                                   color: const Color(0xFF1A237E)
-                                      .withOpacity(0.3),
+                                      .withValues(alpha: 0.3),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -140,7 +138,7 @@ class ManagerProfileScreen extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
@@ -236,7 +234,7 @@ class ManagerProfileScreen extends StatelessWidget {
                               ),
                             );
                             if (confirm == true) {
-                              await AuthService().logout();
+                              await FirebaseAuth.instance.signOut();
                               if (context.mounted) {
                                 Navigator.pushAndRemoveUntil(
                                   context,
@@ -301,7 +299,7 @@ class _InfoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -312,7 +310,7 @@ class _InfoCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
+              color: accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: accentColor, size: 22),
@@ -347,3 +345,5 @@ class _InfoCard extends StatelessWidget {
     );
   }
 }
+
+typedef ManagerProfilePage = ManagerProfileScreen;

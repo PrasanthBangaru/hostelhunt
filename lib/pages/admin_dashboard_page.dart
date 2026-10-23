@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_service.dart';
-import '../auth/login_screen.dart';
-import '../manager/edit_hostel_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_page.dart';
+import 'edit_hostel_page.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -12,7 +12,6 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> with SingleTickerProviderStateMixin {
-  final AuthService _authService = AuthService();
   late TabController _tabController;
 
   @override
@@ -48,7 +47,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
 
     if (confirm == true) {
-      await _authService.logout();
+      await FirebaseAuth.instance.signOut();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -146,7 +145,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.2),
+                color: Colors.amber.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.amber, width: 1),
               ),
@@ -397,7 +396,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: roleColor.withOpacity(0.2),
+                  backgroundColor: roleColor.withValues(alpha: 0.2),
                   child: Icon(roleIcon, color: roleColor),
                 ),
                 title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -416,7 +415,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         role.toUpperCase(),
                         style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 11),
                       ),
-                      backgroundColor: roleColor.withOpacity(0.1),
+                      backgroundColor: roleColor.withValues(alpha: 0.1),
                     ),
                     if (role != "admin")
                       IconButton(
@@ -434,3 +433,5 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 }
+
+typedef AdminDashboardPage = AdminDashboardScreen;

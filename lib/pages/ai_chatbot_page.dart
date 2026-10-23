@@ -1,7 +1,159 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../models/hostel_model.dart';
-import '../../services/ai_service.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+
+class _HostelData {
+  final String hostelId;
+  final String hostelName;
+  final String hostelType;
+  final int price;
+  final int vacancy;
+  final double rating;
+  final double distanceFromCollege;
+  final List<String> facilities;
+  final String address;
+
+  _HostelData({
+    required this.hostelId,
+    required this.hostelName,
+    required this.hostelType,
+    required this.price,
+    required this.vacancy,
+    required this.rating,
+    required this.distanceFromCollege,
+    required this.facilities,
+    required this.address,
+  });
+
+  factory _HostelData.fromMap(Map<String, dynamic> map, String id) {
+    return _HostelData(
+      hostelId: id,
+      hostelName: map['hostelName'] ?? '',
+      hostelType: map['hostelType'] ?? 'Co-Ed',
+      price: (map['price'] as num?)?.toInt() ?? 0,
+      vacancy: (map['vacancy'] as num?)?.toInt() ?? 0,
+      rating: (map['rating'] as num?)?.toDouble() ?? 4.0,
+      distanceFromCollege: (map['distanceFromCollege'] as num?)?.toDouble() ?? 1.0,
+      facilities: List<String>.from(map['facilities'] ?? []),
+      address: map['address'] ?? '',
+    );
+  }
+}
+
+class _AIService {
+  static final _AIService _instance = _AIService._internal();
+  factory _AIService() => _instance;
+  _AIService._internal();
+
+  String _apiKey = const String.fromEnvironment('GEMINI_API_KEY');
+
+  void setApiKey(String key) {
+    _apiKey = key;
+  }
+
+  String get apiKey => _apiKey;
+  bool get hasApiKey => _apiKey.isNotEmpty && _apiKey != 'YOUR_GEMINI_KEY';
+
+  GenerativeModel? _getModel({String modelName = 'gemini-1.5-flash'}) {
+    if (!hasApiKey) return null;
+    return GenerativeModel(
+      model: modelName,
+      apiKey: _apiKey,
+    );
+  }
+
+  Future<String> getChatResponse(
+    String message,
+    List<_HostelData> hostels,
+    List<Map<String, String>> history,
+  ) async {
+    final model = _getModel();
+    if (model != null) {
+      try {
+        final hostelData = hostels.map((h) => {
+          'id': h.hostelId,
+          'name': h.hostelName,
+          'type': h.hostelType,
+          'price': h.price,
+          'vacancy': h.vacancy,
+          'rating': h.rating,
+          'distance': h.distanceFromCollege,
+          'facilities': h.facilities,
+          'address': h.address,
+        }).toList();
+
+        final systemInstruction = 'You are HostelHunt AI, a helpful, intelligent guide for students finding hostels. '
+            'Here is the live database of hostels:\n${jsonEncode(hostelData)}\n\n'
+            'Use this data to answer queries accurately. If asked for recommendations, list matching hostels with details. '
+            'Keep your responses friendly, concise, and professional.';
+
+        List<Content> contents = [];
+        contents.add(Content.text('System Context: $systemInstruction'));
+
+        for (var turn in history) {
+          final isUser = turn['sender'] == 'user';
+          contents.add(isUser ? Content.text(turn['text']!) : Content.model([TextPart(turn['text']!)]));
+        }
+
+        contents.add(Content.text(message));
+
+        final response = await model.generateContent(contents);
+        return response.text ?? 'I could not generate a response. Please check your query.';
+      } catch (e) {
+        return _fallbackChatResponse(message, hostels);
+      }
+    } else {
+      return _fallbackChatResponse(message, hostels);
+    }
+  }
+
+  String _fallbackChatResponse(String message, List<_HostelData> hostels) {
+    final lowercase = message.toLowerCase();
+
+    if (hostels.isEmpty) {
+      return "Hi there! I'm the offline HostelHunt AI. Currently, there are no hostels listed in the system, so I can't recommend any. Please add some hostels first!";
+    }
+
+    if (lowercase.contains('cheap') || lowercase.contains('low price') || lowercase.contains('budget')) {
+      final sorted = List<_HostelData>.from(hostels)..sort((a, b) => a.price.compareTo(b.price));
+      final cheapest = sorted.first;
+      return "The most budget-friendly hostel is **${cheapest.hostelName}** at just **₹${cheapest.price}/month**. It's a ${cheapest.hostelType} hostel located ${cheapest.distanceFromCollege} km from campus.";
+    }
+
+    if (lowercase.contains('near') || lowercase.contains('close') || lowercase.contains('distance')) {
+      final sorted = List<_HostelData>.from(hostels)..sort((a, b) => a.distanceFromCollege.compareTo(b.distanceFromCollege));
+      final closest = sorted.first;
+      return "The closest hostel to campus is **${closest.hostelName}**, located just **${closest.distanceFromCollege} km** away. Rent is ₹${closest.price}/month.";
+    }
+
+    if (lowercase.contains('best') || lowercase.contains('rating') || lowercase.contains('top')) {
+      final sorted = List<_HostelData>.from(hostels)..sort((a, b) => b.rating.compareTo(a.rating));
+      final top = sorted.first;
+      return "The highest-rated hostel is **${top.hostelName}** with a rating of **${top.rating} ★**. It is a ${top.hostelType} hostel priced at ₹${top.price}/month.";
+    }
+
+    if (lowercase.contains('boys') || lowercase.contains('boy')) {
+      final filtered = hostels.where((h) => h.hostelType.toLowerCase() == 'boys').toList();
+      if (filtered.isEmpty) return "Currently, there are no dedicated Boys hostels listed.";
+      final names = filtered.map((h) => "**${h.hostelName}** (₹${h.price}/mo)").join(", ");
+      return "Here are the available Boys hostels: $names.";
+    }
+
+    if (lowercase.contains('girls') || lowercase.contains('girl')) {
+      final filtered = hostels.where((h) => h.hostelType.toLowerCase() == 'girls').toList();
+      if (filtered.isEmpty) return "Currently, there are no dedicated Girls hostels listed.";
+      final names = filtered.map((h) => "**${h.hostelName}** (₹${h.price}/mo)").join(", ");
+      return "Here are the available Girls hostels: $names.";
+    }
+
+    return "Hello! I am the offline HostelHunt AI assistant. You can ask me questions like:\n"
+        "- *What is the cheapest hostel?*\n"
+        "- *Which hostel is closest to the college?*\n"
+        "- *Show me the highest rated hostels.*\n"
+        "- *Show me boys or girls hostels.*";
+  }
+}
 
 class AIChatbotScreen extends StatefulWidget {
   const AIChatbotScreen({super.key});
@@ -14,20 +166,18 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, String>> _messages = [];
-  
-  List<HostelModel> _hostels = [];
+
+  List<_HostelData> _hostels = [];
   bool _isLoadingHostels = true;
   bool _isTyping = false;
-  
-  // Custom temporary key input for session testing
+
   final TextEditingController _apiKeyController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _apiKeyController.text = AIService().apiKey;
+    _apiKeyController.text = _AIService().apiKey;
     _fetchHostels();
-    // Welcome message
     _messages.add({
       'sender': 'ai',
       'text': "Hi! I am your AI Hostel Assistant. 🤖\n\nI can help you find hostels based on price, proximity to college, amenities, or reviews. How can I help you today?",
@@ -37,14 +187,18 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   Future<void> _fetchHostels() async {
     try {
       final snap = await FirebaseFirestore.instance.collection('hostels').get();
-      setState(() {
-        _hostels = snap.docs.map((doc) => HostelModel.fromMap(doc.data(), doc.id)).toList();
-        _isLoadingHostels = false;
-      });
+      if (mounted) {
+        setState(() {
+          _hostels = snap.docs.map((doc) => _HostelData.fromMap(doc.data(), doc.id)).toList();
+          _isLoadingHostels = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoadingHostels = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingHostels = false;
+        });
+      }
     }
   }
 
@@ -62,7 +216,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
-    
+
     _messageController.clear();
     setState(() {
       _messages.add({'sender': 'user', 'text': text});
@@ -70,26 +224,29 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
     });
     _scrollToBottom();
 
-    // Call AI Service
     try {
-      final response = await AIService().getChatResponse(
+      final response = await _AIService().getChatResponse(
         text,
         _hostels,
-        _messages.sublist(0, _messages.length - 1), // History
+        _messages.sublist(0, _messages.length - 1),
       );
-      
-      setState(() {
-        _isTyping = false;
-        _messages.add({'sender': 'ai', 'text': response});
-      });
-    } catch (e) {
-      setState(() {
-        _isTyping = false;
-        _messages.add({
-          'sender': 'ai',
-          'text': "Oops! I encountered an error communicating with the AI backend: $e"
+
+      if (mounted) {
+        setState(() {
+          _isTyping = false;
+          _messages.add({'sender': 'ai', 'text': response});
         });
-      });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isTyping = false;
+          _messages.add({
+            'sender': 'ai',
+            'text': "Oops! I encountered an error communicating with the AI backend: $e"
+          });
+        });
+      }
     }
     _scrollToBottom();
   }
@@ -98,8 +255,8 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.vpn_key, color: Colors.blue),
             SizedBox(width: 10),
             Text("Gemini API Key Setup"),
@@ -126,14 +283,9 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 10),
-            GestureDetector(
-              onTap: () {
-                // Link to get API Key
-              },
-              child: const Text(
-                "Don't have a key? I'll auto-fallback to high-fidelity offline heuristic calculations!",
-                style: TextStyle(color: Colors.blue, fontSize: 12, decoration: TextDecoration.underline),
-              ),
+            const Text(
+              "Don't have a key? I'll auto-fallback to high-fidelity offline heuristic calculations!",
+              style: TextStyle(color: Colors.blue, fontSize: 12, decoration: TextDecoration.underline),
             ),
           ],
         ),
@@ -144,17 +296,18 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              AIService().setApiKey(_apiKeyController.text.trim());
+              _AIService().setApiKey(_apiKeyController.text.trim());
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    AIService().hasApiKey 
-                        ? 'Gemini API Key updated successfully!' 
+                    _AIService().hasApiKey
+                        ? 'Gemini API Key updated successfully!'
                         : 'Switched to offline simulation mode.',
                   ),
                 ),
               );
+              setState(() {});
             },
             child: const Text("Save Key"),
           ),
@@ -180,10 +333,10 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
               children: [
                 const Text("AI Hostel Finder", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text(
-                  AIService().hasApiKey ? "● Online (Gemini)" : "● Offline Simulation",
+                  _AIService().hasApiKey ? "● Online (Gemini)" : "● Offline Simulation",
                   style: TextStyle(
                     fontSize: 11,
-                    color: AIService().hasApiKey ? Colors.green : Colors.orange,
+                    color: _AIService().hasApiKey ? Colors.green : Colors.orange,
                   ),
                 ),
               ],
@@ -202,8 +355,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Warning if using offline mode
-                if (!AIService().hasApiKey)
+                if (!_AIService().hasApiKey)
                   Container(
                     width: double.infinity,
                     color: Colors.orange.shade50,
@@ -222,7 +374,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
                     ),
                   ),
 
-                // Chat Messages List
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
@@ -239,7 +390,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
                   ),
                 ),
 
-                // Quick Suggestion Chips
                 Container(
                   height: 48,
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -256,7 +406,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
                   ),
                 ),
 
-                // Message input panel
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: const BoxDecoration(

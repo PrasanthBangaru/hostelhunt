@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_service.dart';
-import '../../config/admin_config.dart';
-import 'email_verification_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'email_verification_page.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,9 +19,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _secretKeyController = TextEditingController();
   
-  final AuthService _authService = AuthService();
   String _selectedRole = "student"; // Default role
   bool _isLoading = false;
+
+  static const String adminSecretKey = "HOSTELHUNT_ADMIN_2026";
 
   @override
   void dispose() {
@@ -43,7 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Validate Admin Secret Key if Admin role is selected
     if (_selectedRole == "admin") {
       final inputKey = _secretKeyController.text.trim();
-      if (!AdminConfig.validateSecretKey(inputKey)) {
+      if (inputKey != adminSecretKey) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Invalid Secret Key! Contact administrator for the key."),
@@ -59,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final userCredential = await _authService.register(
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
@@ -300,3 +300,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
+typedef RegisterPage = RegisterScreen;

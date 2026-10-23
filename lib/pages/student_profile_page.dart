@@ -1,8 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../../services/auth_service.dart';
-import '../../auth/login_screen.dart';
+import 'login_page.dart';
 
 class StudentProfileScreen extends StatelessWidget {
   const StudentProfileScreen({super.key});
@@ -76,7 +75,7 @@ class StudentProfileScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
+                            color: Colors.white.withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -158,7 +157,7 @@ class StudentProfileScreen extends StatelessWidget {
                               ),
                             );
                             if (confirm == true) {
-                              await AuthService().logout();
+                              await FirebaseAuth.instance.signOut();
                               if (context.mounted) {
                                 Navigator.pushAndRemoveUntil(
                                   context,
@@ -220,7 +219,7 @@ class _InfoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -231,7 +230,7 @@ class _InfoCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.blue, size: 22),
@@ -266,3 +265,5 @@ class _InfoCard extends StatelessWidget {
     );
   }
 }
+
+typedef StudentProfilePage = StudentProfileScreen;

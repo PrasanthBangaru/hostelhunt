@@ -2,12 +2,289 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as lat_lng;
-import '../../../widgets/hostel_card.dart';
-import 'student_profile_screen.dart';
-import 'hostel_details_screen.dart';
-import '../../student/price_predictor_screen.dart';
-import '../../student/ai_chatbot_screen.dart';
-import '../../../models/hostel_model.dart';
+import 'student_profile_page.dart';
+import 'hostel_details_page.dart';
+import 'price_predictor_page.dart';
+import 'ai_chatbot_page.dart';
+
+class _HostelModel {
+  String? hostelId;
+  String hostelName;
+  String ownerName;
+  String ownerPhone;
+  String collegeName;
+  String address;
+  double latitude;
+  double longitude;
+  int price;
+  int deposit;
+  int vacancy;
+  double rating;
+  List<String> facilities;
+  List<String> images;
+  String description;
+  Map<String, int> facilityCosts;
+  String hostelType;
+  double distanceFromCollege;
+  String? managerId;
+
+  _HostelModel({
+    this.hostelId,
+    required this.hostelName,
+    required this.ownerName,
+    required this.ownerPhone,
+    required this.collegeName,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.price,
+    required this.deposit,
+    required this.vacancy,
+    required this.rating,
+    required this.facilities,
+    required this.images,
+    required this.description,
+    this.facilityCosts = const {},
+    this.hostelType = "Co-Ed",
+    this.distanceFromCollege = 0.0,
+    this.managerId,
+  });
+}
+
+class HostelCard extends StatelessWidget {
+  final String hostelId;
+  final String hostelName;
+  final String collegeName;
+  final int price;
+  final int vacancy;
+  final List<String> facilities;
+  final Map<String, int> facilityCosts;
+  final String? imageUrl;
+  final String hostelType;
+  final double distanceFromCollege;
+  final String? managerId;
+  final String address;
+  final double latitude;
+  final double longitude;
+
+  const HostelCard({
+    super.key,
+    required this.hostelId,
+    required this.hostelName,
+    required this.collegeName,
+    required this.price,
+    required this.vacancy,
+    required this.facilities,
+    this.facilityCosts = const {},
+    this.imageUrl,
+    this.hostelType = "Co-Ed",
+    this.distanceFromCollege = 0.0,
+    this.managerId,
+    this.address = "",
+    this.latitude = 0.0,
+    this.longitude = 0.0,
+  });
+
+  int get totalPrice =>
+      price + facilityCosts.values.fold(0, (prev, cost) => prev + cost);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      elevation: 5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              hostelName,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text("🏫 College : $collegeName"),
+            if (address.isNotEmpty) Text("📍 Location : $address", style: TextStyle(color: Colors.grey.shade700)),
+            Text("🛏 Vacancy : $vacancy Beds"),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: hostelType == "Boys"
+                        ? Colors.blue.shade50
+                        : hostelType == "Girls"
+                            ? Colors.pink.shade50
+                            : Colors.purple.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: hostelType == "Boys"
+                          ? Colors.blue.shade200
+                          : hostelType == "Girls"
+                              ? Colors.pink.shade200
+                              : Colors.purple.shade200,
+                    ),
+                  ),
+                  child: Text(
+                    "🚻 $hostelType Hostel",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: hostelType == "Boys"
+                          ? Colors.blue.shade800
+                          : hostelType == "Girls"
+                              ? Colors.pink.shade800
+                              : Colors.purple.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.directions_walk, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 2),
+                Text(
+                  "${distanceFromCollege.toStringAsFixed(1)} km to College",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Price Breakdown
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Base Price (Bed + Food + WiFi)",
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
+                      Text(
+                        "₹$price/mo",
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ...facilityCosts.entries.map(
+                    (e) => Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${e.key} (extra)",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.orange,
+                            ),
+                          ),
+                          Text(
+                            "+₹${e.value}/mo",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.orange,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (facilityCosts.isNotEmpty) const Divider(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Total",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        "₹$totalPrice/month",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Facility chips
+            Wrap(
+              spacing: 8,
+              children: facilities.map(
+                (facility) => Chip(
+                  label: Text(facility),
+                  backgroundColor: Colors.blue.shade50,
+                ),
+              ).toList(),
+            ),
+            const SizedBox(height: 15),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => HostelDetailsScreen(
+                        hostelId: hostelId,
+                        hostelName: hostelName,
+                        collegeName: collegeName,
+                        price: price,
+                        vacancy: vacancy,
+                        facilities: facilities,
+                        facilityCosts: facilityCosts,
+                        imageUrl: imageUrl,
+                        hostelType: hostelType,
+                        distanceFromCollege: distanceFromCollege,
+                        managerId: managerId,
+                        address: address,
+                        latitude: latitude,
+                        longitude: longitude,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text("View Details"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
@@ -283,7 +560,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   ],
                 ),
 
-                
                 // Collapsible Filter Panel
                 if (_showFilters) ...[
                   const SizedBox(height: 15),
@@ -406,7 +682,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   ),
                 ],
 
-
                 // Recommended Hostels Carousel
                 if (_searchQuery.isEmpty && !_showFilters) ...[
                   const SizedBox(height: 20),
@@ -428,7 +703,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     height: 165,
                     child: Builder(
                       builder: (context) {
-                        // Score and sort all hostels using local AI
                         final hostelModels = allHostelData.map((d) {
                           Map<String, int> fc = {};
                           final raw = d['facilityCosts'];
@@ -437,7 +711,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                               fc[k] = (v as num).toInt();
                             });
                           }
-                          return HostelModel(
+                          return _HostelModel(
                             hostelId: d['id'],
                             hostelName: d['hostelName'] ?? '',
                             ownerName: d['ownerName'] ?? '',
@@ -511,14 +785,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [color, color.withOpacity(0.75)],
+                                    colors: [color, color.withValues(alpha: 0.75)],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: color.withOpacity(0.35),
+                                      color: color.withValues(alpha: 0.35),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),
@@ -609,10 +883,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     itemCount: filteredHostels.length,
                     itemBuilder: (context, index) {
                       final data = filteredHostels[index];
-
                       final facilities = List<String>.from(data["facilities"] ?? []);
 
-                      // Safely parse facilityCosts — field may not exist on old documents
                       Map<String, int> facilityCosts = {};
                       final rawCosts = data["facilityCosts"];
                       if (rawCosts != null) {
@@ -663,7 +935,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
   Widget _buildFullMapView(List<Map<String, dynamic>> hostels) {
     List<Marker> mapMarkers = [];
-    lat_lng.LatLng defaultCenter = const lat_lng.LatLng(17.7813, 83.3768); // Center near college campus
+    lat_lng.LatLng defaultCenter = const lat_lng.LatLng(17.7813, 83.3768);
 
     for (int i = 0; i < hostels.length; i++) {
       final h = hostels[i];
@@ -716,87 +988,90 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 ),
               );
             },
-            child: Tooltip(
-              message: "$name (₹$price/mo)",
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade900,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "₹$price",
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade800,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const Icon(
-                    Icons.location_on,
-                    color: Colors.red,
-                    size: 32,
+                  child: Text(
+                    "₹$price",
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Icons.location_on,
+                  color: Colors.red,
+                  size: 32,
+                ),
+              ],
             ),
           ),
         ),
       );
     }
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Column(
+    return Container(
+      height: 480,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: defaultCenter,
+                initialZoom: 13.5,
+              ),
               children: [
-                const Icon(Icons.map, color: Colors.blue),
-                const SizedBox(width: 8),
-                Text(
-                  "Showing ${hostels.length} Hostels on Map",
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.hostelhunt',
                 ),
-                const Spacer(),
-                const Text("Tap pin for details", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                MarkerLayer(markers: mapMarkers),
               ],
             ),
           ),
-          SizedBox(
-            height: 380,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-              child: FlutterMap(
-                options: MapOptions(
-                  initialCenter: defaultCenter,
-                  initialZoom: 13.5,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.hostelhunt',
-                  ),
-                  MarkerLayer(markers: mapMarkers),
-                ],
+          Positioned(
+            top: 10,
+            left: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+              ),
+              child: Text(
+                "🗺️ Showing ${hostels.length} hostels on map",
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Colors.grey.shade50,
+          Positioned(
+            bottom: 12,
+            left: 12,
+            right: 12,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("📍 Hostels on Map:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text("Tap a hostel below to view on map:", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 6),
                 SizedBox(
-                  height: 100,
+                  height: 75,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: hostels.length,
@@ -883,5 +1158,4 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 }
 
-
-
+typedef StudentHomePage = StudentHomeScreen;

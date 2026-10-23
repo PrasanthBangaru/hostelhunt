@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,11 +7,59 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as lat_lng;
-import '../../../services/ai_service.dart';
-import '../../../services/ml_price_service.dart';
-import '../../../models/hostel_model.dart';
-import '../../../models/review_model.dart';
-import '../../student/chat_screen.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'chat_page.dart';
+
+class ReviewModel {
+  final String? reviewId;
+  final String hostelId;
+  final String studentName;
+  final String studentId;
+  final double rating;
+  final String comment;
+  final DateTime timestamp;
+  final String sentiment; // 'positive', 'neutral', 'negative'
+  final double sentimentScore; // Value between 0.0 and 1.0
+
+  ReviewModel({
+    this.reviewId,
+    required this.hostelId,
+    required this.studentName,
+    required this.studentId,
+    required this.rating,
+    required this.comment,
+    required this.timestamp,
+    this.sentiment = 'neutral',
+    this.sentimentScore = 0.5,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'hostelId': hostelId,
+      'studentName': studentName,
+      'studentId': studentId,
+      'rating': rating,
+      'comment': comment,
+      'timestamp': Timestamp.fromDate(timestamp),
+      'sentiment': sentiment,
+      'sentimentScore': sentimentScore,
+    };
+  }
+
+  factory ReviewModel.fromMap(Map<String, dynamic> map, String id) {
+    return ReviewModel(
+      reviewId: id,
+      hostelId: map['hostelId'] ?? '',
+      studentName: map['studentName'] ?? 'Anonymous',
+      studentId: map['studentId'] ?? '',
+      rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+      comment: map['comment'] ?? '',
+      timestamp: (map['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      sentiment: map['sentiment'] ?? 'neutral',
+      sentimentScore: (map['sentimentScore'] as num?)?.toDouble() ?? 0.5,
+    );
+  }
+}
 
 class HostelDetailsScreen extends StatefulWidget {
   final String hostelId;
@@ -51,7 +100,7 @@ class HostelDetailsScreen extends StatefulWidget {
 }
 
 class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
-  Set<String> _selectedExtraFacilities = {};
+  final Set<String> _selectedExtraFacilities = {};
 
   int get totalPrice {
     int total = widget.price;
@@ -87,19 +136,28 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   Future<void> _trainMLModel() async {
     try {
       final snap = await FirebaseFirestore.instance.collection('hostels').get();
-      final hostels = snap.docs.map((doc) => HostelModel.fromMap(doc.data(), doc.id)).toList();
-      MLPriceService().trainModel(hostels);
-      final predicted = MLPriceService().predictPrice(
-        distanceFromCollege: widget.distanceFromCollege,
-        hostelType: widget.hostelType,
-        rating: 4.0,
-        facilitiesCount: widget.facilities.length,
-      );
-      if (mounted) {
-        setState(() {
-          _mlPredictedPrice = predicted;
-          _mlModelTrained = true;
-        });
+      final hostels = snap.docs;
+      if (hostels.length >= 3) {
+        double avgPrice = 0;
+        for (var doc in hostels) {
+          avgPrice += ((doc.data()['price'] ?? 0) as num).toDouble();
+        }
+        avgPrice /= hostels.length;
+
+        // Estimate price based on distance, type, facilities
+        double distFactor = -(widget.distanceFromCollege * 200);
+        double typeFactor = widget.hostelType == 'Boys' ? 100 : (widget.hostelType == 'Girls' ? -100 : 0);
+        double facFactor = widget.facilities.length * 350;
+        double predicted = (avgPrice + distFactor + typeFactor + facFactor).clamp(1500.0, 50000.0);
+
+        if (mounted) {
+          setState(() {
+            _mlPredictedPrice = predicted;
+            _mlModelTrained = true;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _mlModelTrained = true);
       }
     } catch (_) {
       if (mounted) setState(() => _mlModelTrained = true);
@@ -135,6 +193,48 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _analyzeSentiment(String comment) async {
+    final apiKey = const String.fromEnvironment('GEMINI_API_KEY');
+    if (apiKey.isNotEmpty && apiKey != 'YOUR_GEMINI_KEY') {
+      try {
+        final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+        final prompt = 'Analyze the sentiment of this review comment for a hostel: "$comment". '
+            'Reply ONLY in JSON format: {"sentiment": "positive" | "neutral" | "negative", "score": 0.0 to 1.0}';
+        final response = await model.generateContent([Content.text(prompt)]);
+        final cleanText = response.text?.trim()
+            .replaceAll('```json', '')
+            .replaceAll('```', '') ?? '';
+        final decoded = jsonDecode(cleanText);
+        return {
+          'sentiment': decoded['sentiment'] ?? 'neutral',
+          'score': (decoded['score'] as num?)?.toDouble() ?? 0.5,
+        };
+      } catch (_) {}
+    }
+
+    // Fallback heuristic lexicon analysis
+    final lowercase = comment.toLowerCase();
+    final positiveWords = ['good', 'great', 'nice', 'clean', 'friendly', 'best', 'love', 'comfortable', 'awesome', 'excellent', 'peaceful', 'safety', 'safe', 'worth', 'well', 'perfect'];
+    final negativeWords = ['bad', 'dirty', 'noisy', 'rude', 'worst', 'hate', 'uncomfortable', 'expensive', 'crowded', 'smell', 'poor', 'slow', 'waste', 'regret', 'unsafe', 'dusty'];
+    int posCount = 0;
+    int negCount = 0;
+    for (var w in positiveWords) {
+      if (lowercase.contains(w)) posCount++;
+    }
+    for (var w in negativeWords) {
+      if (lowercase.contains(w)) negCount++;
+    }
+    if (posCount > negCount) {
+      double score = 0.5 + (posCount - negCount) * 0.1;
+      return {'sentiment': 'positive', 'score': score.clamp(0.6, 1.0)};
+    } else if (negCount > posCount) {
+      double score = 0.5 - (negCount - posCount) * 0.1;
+      return {'sentiment': 'negative', 'score': score.clamp(0.0, 0.4)};
+    } else {
+      return {'sentiment': 'neutral', 'score': 0.5};
+    }
+  }
+
   Future<void> _submitReview() async {
     final comment = _reviewController.text.trim();
     if (comment.isEmpty) {
@@ -144,8 +244,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     setState(() => _isSubmittingReview = true);
 
     try {
-      // Perform sentiment analysis
-      final sentimentData = await AIService().analyzeSentiment(comment);
+      final sentimentData = await _analyzeSentiment(comment);
       final sentiment = sentimentData['sentiment'] as String;
       final score = sentimentData['score'] as double;
 
@@ -201,12 +300,10 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     return Icons.sentiment_neutral;
   }
 
-  /// Generate simulated vacancy forecast data (6 months)
   List<FlSpot> _generateVacancyForecast() {
     final baseVacancy = widget.vacancy.toDouble();
-    // Simple simulation: vacancy reduces over months as students join
     final List<FlSpot> spots = [];
-    final patterns = [0.0, -0.1, -0.2, -0.05, -0.15, 0.05]; // Fluctuations
+    final patterns = [0.0, -0.1, -0.2, -0.05, -0.15, 0.05];
     double current = baseVacancy;
     for (int i = 0; i < 6; i++) {
       current = (current + (baseVacancy * patterns[i])).clamp(0, baseVacancy + 5);
@@ -259,7 +356,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           ),
                   ),
                 ),
-                // ML Price Badge overlay
                 if (_mlModelTrained)
                   Positioned(
                     top: 12,
@@ -532,7 +628,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2)),
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
                       ],
                     ),
                     child: LineChart(
@@ -581,7 +677,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                             barWidth: 3,
                             belowBarData: BarAreaData(
                               show: true,
-                              color: Colors.purple.withOpacity(0.1),
+                              color: Colors.purple.withValues(alpha: 0.1),
                             ),
                             dotData: const FlDotData(show: true),
                           ),
@@ -617,7 +713,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2)),
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
                       ],
                     ),
                     child: Column(
@@ -657,9 +753,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _sentimentColor(_sentimentResult!).withOpacity(0.1),
+                              color: _sentimentColor(_sentimentResult!).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: _sentimentColor(_sentimentResult!).withOpacity(0.4)),
+                              border: Border.all(color: _sentimentColor(_sentimentResult!).withValues(alpha: 0.4)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -729,7 +825,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           .map((d) => ReviewModel.fromMap(d.data() as Map<String, dynamic>, d.id))
                           .toList();
 
-                      // Sentiment breakdown
                       int pos = reviews.where((r) => r.sentiment == 'positive').length;
                       int neg = reviews.where((r) => r.sentiment == 'negative').length;
                       int neu = reviews.where((r) => r.sentiment == 'neutral').length;
@@ -737,7 +832,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Sentiment Summary Bar
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -745,7 +839,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
+                                    color: Colors.black.withValues(alpha: 0.05),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2)),
                               ],
@@ -840,7 +934,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: ratio,
-              backgroundColor: color.withOpacity(0.15),
+              backgroundColor: color.withValues(alpha: 0.15),
               valueColor: AlwaysStoppedAnimation<Color>(color),
               minHeight: 8,
             ),
@@ -861,7 +955,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,9 +993,9 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: color.withOpacity(0.3)),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -929,7 +1023,6 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     double lng = widget.longitude;
 
     if (lat == 0.0 || lng == 0.0) {
-      // Smart default fallback centered around college campus region with offset
       lat = 17.7813 + ((widget.distanceFromCollege.abs() % 5) * 0.003);
       lng = 83.3768 + ((widget.distanceFromCollege.abs() % 5) * 0.004);
     }
@@ -1064,3 +1157,4 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   }
 }
 
+typedef HostelDetailsPage = HostelDetailsScreen;

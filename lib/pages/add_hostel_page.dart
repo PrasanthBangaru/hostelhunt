@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../models/hostel_model.dart';
-import '../../services/firestore_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddHostelScreen extends StatefulWidget {
   const AddHostelScreen({super.key});
@@ -23,8 +22,6 @@ class _AddHostelScreenState extends State<AddHostelScreen> {
   final distance = TextEditingController();
 
   String selectedHostelType = "Co-Ed";
-
-  final firestore = FirestoreService();
 
   // Basic facilities always included in base price
   final List<String> basicFacilities = ['Bed', 'Food', 'WiFi'];
@@ -120,7 +117,6 @@ class _AddHostelScreenState extends State<AddHostelScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             TextField(
               controller: hostelName,
               decoration: const InputDecoration(labelText: "Hostel Name"),
@@ -373,30 +369,29 @@ class _AddHostelScreenState extends State<AddHostelScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  HostelModel hostel = HostelModel(
-                    hostelName: hostelName.text,
-                    ownerName: ownerName.text,
-                    ownerPhone: ownerPhone.text,
-                    collegeName: college.text,
-                    address: address.text,
-                    latitude: 0,
-                    longitude: 0,
-                    price: int.tryParse(price.text) ?? 0,
-                    deposit: int.tryParse(deposit.text) ?? 0,
-                    vacancy: int.tryParse(vacancy.text) ?? 0,
-                    rating: 0,
-                    facilities: _allFacilities,
-                    images: [],
-                    description: description.text,
-                    facilityCosts: _facilityCosts,
-                    hostelType: selectedHostelType,
-                    distanceFromCollege: double.tryParse(distance.text) ?? 0.0,
-                  );
+                  final uid = FirebaseAuth.instance.currentUser?.uid;
+                  final hostelData = {
+                    "hostelName": hostelName.text,
+                    "ownerName": ownerName.text,
+                    "ownerPhone": ownerPhone.text,
+                    "collegeName": college.text,
+                    "address": address.text,
+                    "latitude": 0.0,
+                    "longitude": 0.0,
+                    "price": int.tryParse(price.text) ?? 0,
+                    "deposit": int.tryParse(deposit.text) ?? 0,
+                    "vacancy": int.tryParse(vacancy.text) ?? 0,
+                    "rating": 0.0,
+                    "facilities": _allFacilities,
+                    "images": <String>[],
+                    "description": description.text,
+                    "facilityCosts": _facilityCosts,
+                    "hostelType": selectedHostelType,
+                    "distanceFromCollege": double.tryParse(distance.text) ?? 0.0,
+                    if (uid != null) "managerId": uid,
+                  };
 
-                  await firestore.addHostel(
-                    hostel,
-                    managerId: FirebaseAuth.instance.currentUser?.uid,
-                  );
+                  await FirebaseFirestore.instance.collection("hostels").add(hostelData);
 
                   if (!context.mounted) return;
 
@@ -411,10 +406,11 @@ class _AddHostelScreenState extends State<AddHostelScreen> {
                 child: const Text("Save Hostel"),
               ),
             ),
-
           ],
         ),
       ),
     );
   }
 }
+
+typedef AddHostelPage = AddHostelScreen;

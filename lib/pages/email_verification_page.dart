@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart';
+import 'login_page.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({super.key});
@@ -297,3 +297,5 @@ class _VerifiedSuccessScreen extends StatelessWidget {
     );
   }
 }
+
+typedef EmailVerificationPage = EmailVerificationScreen;

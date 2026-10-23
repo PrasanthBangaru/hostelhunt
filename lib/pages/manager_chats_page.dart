@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../student/chat_screen.dart';
+import 'chat_page.dart';
 
 class ManagerChatsScreen extends StatelessWidget {
   const ManagerChatsScreen({super.key});
@@ -175,3 +175,5 @@ class ManagerChatsScreen extends StatelessWidget {
     );
   }
 }
+
+typedef ManagerChatsPage = ManagerChatsScreen;

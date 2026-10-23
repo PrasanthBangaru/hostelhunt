@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_service.dart';
-import '../../config/admin_config.dart';
-import '../manager/dashboard_screen.dart';
-import '../manager/student/student_home_screen.dart';
-import '../admin/admin_dashboard_screen.dart';
-import 'register_screen.dart';
-import 'email_verification_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'manager_dashboard_page.dart';
+import 'student_home_page.dart';
+import 'admin_dashboard_page.dart';
+import 'register_page.dart';
+import 'email_verification_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,9 +19,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _secretKeyController = TextEditingController();
-  final AuthService _authService = AuthService();
   String _selectedRole = "student";
   bool _isLoading = false;
+
+  static const String adminSecretKey = "HOSTELHUNT_ADMIN_2026";
 
   @override
   void dispose() {
@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // Verify secret key if admin role is selected
     if (_selectedRole == "admin") {
       final secretKeyInput = _secretKeyController.text.trim();
-      if (!AdminConfig.validateSecretKey(secretKeyInput)) {
+      if (secretKeyInput != adminSecretKey) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Invalid Admin Secret Key! Access denied."),
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final userCredential = await _authService.login(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -85,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text("Error: You are registered as a $actualRole, not a $_selectedRole.")),
               );
-              await _authService.logout();
+              await FirebaseAuth.instance.signOut();
               return;
             }
             role = actualRole ?? _selectedRole;
@@ -100,7 +100,6 @@ class _LoginScreenState extends State<LoginScreen> {
             });
           }
         } catch (firestoreError) {
-          // If Firestore read/write rules restrict access, fallback gracefully to _selectedRole
           debugPrint("Firestore user doc fetch notice: $firestoreError");
         }
 
@@ -108,7 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Check if email is verified
         if (!user.emailVerified) {
-          // Send a fresh verification email
           await user.sendEmailVerification();
 
           if (!mounted) return;
@@ -121,7 +119,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
 
-          // Redirect to the email verification waiting screen
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
@@ -215,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (emailToReset != null && emailToReset.isNotEmpty) {
       try {
-        await _authService.resetPassword(emailToReset);
+        await FirebaseAuth.instance.sendPasswordResetEmail(email: emailToReset);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -371,7 +368,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: const Text("Don't have an account? Register"),
                 ),
                 const SizedBox(height: 10),
-                Divider(),
+                const Divider(),
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.explore),
@@ -405,3 +402,5 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+typedef LoginPage = LoginScreen;

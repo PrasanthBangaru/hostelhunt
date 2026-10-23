@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../models/hostel_model.dart';
-import '../../services/firestore_service.dart';
 
 class EditHostelScreen extends StatefulWidget {
   final QueryDocumentSnapshot hostel;
@@ -28,8 +26,6 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
   final distance = TextEditingController();
 
   String selectedHostelType = "Co-Ed";
-
-  final firestore = FirestoreService();
 
   // Basic facilities always included in base price
   final List<String> basicFacilities = ['Bed', 'Food', 'WiFi'];
@@ -408,31 +404,26 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  HostelModel updatedHostel = HostelModel(
-                    hostelId: widget.hostel.id,
-                    hostelName: hostelName.text,
-                    ownerName: ownerName.text,
-                    ownerPhone: ownerPhone.text,
-                    collegeName: college.text,
-                    address: address.text,
-                    latitude: 0,
-                    longitude: 0,
-                    price: int.tryParse(price.text) ?? 0,
-                    deposit: int.tryParse(deposit.text) ?? 0,
-                    vacancy: int.tryParse(vacancy.text) ?? 0,
-                    rating: 0,
-                    facilities: _allFacilities,
-                    images: [],
-                    description: description.text,
-                    facilityCosts: _facilityCosts,
-                    hostelType: selectedHostelType,
-                    distanceFromCollege: double.tryParse(distance.text) ?? 0.0,
-                  );
+                  final updatedData = {
+                    "hostelName": hostelName.text,
+                    "ownerName": ownerName.text,
+                    "ownerPhone": ownerPhone.text,
+                    "collegeName": college.text,
+                    "address": address.text,
+                    "price": int.tryParse(price.text) ?? 0,
+                    "deposit": int.tryParse(deposit.text) ?? 0,
+                    "vacancy": int.tryParse(vacancy.text) ?? 0,
+                    "facilities": _allFacilities,
+                    "description": description.text,
+                    "facilityCosts": _facilityCosts,
+                    "hostelType": selectedHostelType,
+                    "distanceFromCollege": double.tryParse(distance.text) ?? 0.0,
+                  };
 
-                  await firestore.updateHostel(
-                    widget.hostel.id,
-                    updatedHostel,
-                  );
+                  await FirebaseFirestore.instance
+                      .collection("hostels")
+                      .doc(widget.hostel.id)
+                      .update(updatedData);
 
                   if (!context.mounted) return;
 
@@ -453,3 +444,5 @@ class _EditHostelScreenState extends State<EditHostelScreen> {
     );
   }
 }
+
+typedef EditHostelPage = EditHostelScreen;

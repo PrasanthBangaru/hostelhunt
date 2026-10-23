@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../auth/welcome_screen.dart';
+import 'welcome_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -9,7 +9,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -33,20 +32,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.blue,
-
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-
             Icon(
               Icons.home_work,
               color: Colors.white,
               size: 100,
             ),
-
             SizedBox(height: 20),
-
             Text(
               "HostelHunt",
               style: TextStyle(
@@ -61,3 +56,5 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
+
+typedef SplashPage = SplashScreen;
