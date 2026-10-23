@@ -66,6 +66,8 @@ class HostelCard extends StatelessWidget {
   final String address;
   final double latitude;
   final double longitude;
+  final double foodRating;
+  final Map<String, dynamic>? foodMenu;
 
   const HostelCard({
     super.key,
@@ -83,7 +85,64 @@ class HostelCard extends StatelessWidget {
     this.address = "",
     this.latitude = 0.0,
     this.longitude = 0.0,
+    this.foodRating = 4.6,
+    this.foodMenu,
   });
+
+  static const List<String> _weekDays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+  ];
+
+  static const Map<String, Map<String, String>> _defaultWeeklyMenu = {
+    'Monday': {
+      'breakfast': 'Idly + Sambar',
+      'lunch': 'Rice + Curry',
+      'dinner': 'Chapathi + Paneer',
+    },
+    'Tuesday': {
+      'breakfast': 'Poori + Aloo Masala',
+      'lunch': 'Rice + Sambar + Veg',
+      'dinner': 'Roti + Mixed Veg',
+    },
+    'Wednesday': {
+      'breakfast': 'Upma + Chutney',
+      'lunch': 'Rice + Dal + Salad',
+      'dinner': 'Veg Fried Rice + Manchurian',
+    },
+    'Thursday': {
+      'breakfast': 'Dosa + Sambar',
+      'lunch': 'Rice + Tomato Dal',
+      'dinner': 'Chapathi + Egg / Paneer',
+    },
+    'Friday': {
+      'breakfast': 'Pongal + Vada',
+      'lunch': 'Rice + Chole Masala',
+      'dinner': 'Rotis + Mushroom Curry',
+    },
+    'Saturday': {
+      'breakfast': 'Aloo Paratha + Curd',
+      'lunch': 'South Indian Meals',
+      'dinner': 'Veg Pulao + Raita',
+    },
+    'Sunday': {
+      'breakfast': 'Chole Bhature',
+      'lunch': 'Chicken / Paneer Biryani',
+      'dinner': 'Light Phulka + Dal',
+    },
+  };
+
+  Map<String, String> _getTodayMeals() {
+    final day = _weekDays[(DateTime.now().weekday - 1).clamp(0, 6)];
+    if (foodMenu != null && foodMenu![day] != null) {
+      final raw = foodMenu![day] as Map<String, dynamic>;
+      return {
+        'breakfast': raw['breakfast']?.toString() ?? 'Idly + Sambar',
+        'lunch': raw['lunch']?.toString() ?? 'Rice + Curry',
+        'dinner': raw['dinner']?.toString() ?? 'Chapathi + Paneer',
+      };
+    }
+    return _defaultWeeklyMenu[day] ?? _defaultWeeklyMenu['Monday']!;
+  }
 
   int get totalPrice =>
       price + facilityCosts.values.fold(0, (prev, cost) => prev + cost);
@@ -248,7 +307,93 @@ class HostelCard extends StatelessWidget {
                 ),
               ).toList(),
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 10),
+
+            // 🍽️ Weekly Food Menu & Rating Preview
+            Builder(
+              builder: (context) {
+                final meals = _getTodayMeals();
+                final dayName = _weekDays[(DateTime.now().weekday - 1).clamp(0, 6)];
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFE082), width: 1.5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.restaurant, size: 16, color: Color(0xFFE65100)),
+                              const SizedBox(width: 6),
+                              const Text(
+                                "Today's Menu",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFFE65100),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFE0B2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  dayName.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E7D32),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star, color: Colors.amberAccent, size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "Food: ${foodRating.toStringAsFixed(1)}/5",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _buildMealPreviewRow("Breakfast", meals['breakfast']!),
+                      const SizedBox(height: 2),
+                      _buildMealPreviewRow("Lunch", meals['lunch']!),
+                      const SizedBox(height: 2),
+                      _buildMealPreviewRow("Dinner", meals['dinner']!),
+                    ],
+                  ),
+                );
+              },
+            ),
 
             SizedBox(
               width: double.infinity,
@@ -272,6 +417,8 @@ class HostelCard extends StatelessWidget {
                         address: address,
                         latitude: latitude,
                         longitude: longitude,
+                        foodRating: foodRating,
+                        foodMenu: foodMenu,
                       ),
                     ),
                   );
@@ -282,6 +429,28 @@ class HostelCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMealPreviewRow(String meal, String item) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            "$meal:",
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            item,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -908,6 +1077,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                         address: data["address"] ?? "",
                         latitude: (data["latitude"] as num?)?.toDouble() ?? 0.0,
                         longitude: (data["longitude"] as num?)?.toDouble() ?? 0.0,
+                        foodRating: (data["foodRating"] as num?)?.toDouble() ?? 4.6,
+                        foodMenu: data["foodMenu"] as Map<String, dynamic>?,
                       );
                     },
                   ),

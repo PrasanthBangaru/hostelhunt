@@ -388,6 +388,16 @@ class _AddHostelScreenState extends State<AddHostelScreen> {
                     "facilityCosts": _facilityCosts,
                     "hostelType": selectedHostelType,
                     "distanceFromCollege": double.tryParse(distance.text) ?? 0.0,
+                    "foodRating": 4.6,
+                    "foodMenu": {
+                      "Monday": {"breakfast": "Idly + Sambar", "lunch": "Rice + Curry", "dinner": "Chapathi + Paneer"},
+                      "Tuesday": {"breakfast": "Poori + Aloo", "lunch": "Rice + Sambar", "dinner": "Roti + Veg Curry"},
+                      "Wednesday": {"breakfast": "Upma + Chutney", "lunch": "Rice + Dal", "dinner": "Veg Fried Rice + Manchurian"},
+                      "Thursday": {"breakfast": "Dosa + Sambar", "lunch": "Rice + Tomato Dal", "dinner": "Chapathi + Egg / Paneer"},
+                      "Friday": {"breakfast": "Pongal + Vada", "lunch": "Rice + Chole", "dinner": "Rotis + Mushroom Curry"},
+                      "Saturday": {"breakfast": "Aloo Paratha", "lunch": "South Indian Meals", "dinner": "Veg Pulao + Raita"},
+                      "Sunday": {"breakfast": "Chole Bhature", "lunch": "Chicken / Paneer Biryani", "dinner": "Phulka + Dal"},
+                    },
                     if (uid != null) "managerId": uid,
                   };
 

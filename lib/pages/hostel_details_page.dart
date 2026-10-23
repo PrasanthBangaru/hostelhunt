@@ -76,6 +76,8 @@ class HostelDetailsScreen extends StatefulWidget {
   final String address;
   final double latitude;
   final double longitude;
+  final double foodRating;
+  final Map<String, dynamic>? foodMenu;
 
   const HostelDetailsScreen({
     super.key,
@@ -93,6 +95,8 @@ class HostelDetailsScreen extends StatefulWidget {
     this.address = "",
     this.latitude = 0.0,
     this.longitude = 0.0,
+    this.foodRating = 4.6,
+    this.foodMenu,
   });
 
   @override
@@ -125,6 +129,92 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   // ML price state
   double _mlPredictedPrice = 0.0;
   bool _mlModelTrained = false;
+
+  // Weekly Food Menu state
+  int _selectedFoodDayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
+
+  static const List<String> _weekDays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+  ];
+
+  static const Map<String, Map<String, String>> _defaultWeeklyMenu = {
+    'Monday': {
+      'breakfast': 'Idly + Sambar + Coconut Chutney',
+      'lunch': 'Steamed Rice + Dal Tadka + Aloo Poriyal + Curd',
+      'dinner': 'Soft Chapathi + Paneer Butter Masala',
+      'special': 'Paneer Delight',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Balanced • High Protein • Unlimited Rice',
+    },
+    'Tuesday': {
+      'breakfast': 'Crispy Poori + Potato Masala Gravy',
+      'lunch': 'Rice + Tomato Sambar + Bhindi Fry + Buttermilk',
+      'dinner': 'Hot Phulka + Mixed Veg Korma + Rice',
+      'special': 'Home Style Curry',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Fibre Rich • Fresh Vegetables',
+    },
+    'Wednesday': {
+      'breakfast': 'Poha / Vegetable Upma + Chutney',
+      'lunch': 'Jeera Rice + Rajma Masala + Fresh Salad + Papad',
+      'dinner': 'Veg Fried Rice + Veg/Chicken Manchurian',
+      'special': '⭐ Indo-Chinese Feast',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Student Favorite Night • Non-Veg / Veg options',
+    },
+    'Thursday': {
+      'breakfast': 'Crispy Masala Dosa + Podi + Chutney',
+      'lunch': 'Rice + Spinach Dal + Raw Banana Fry + Curd',
+      'dinner': 'Chapathi + Egg Curry / Paneer Bhurji',
+      'special': 'Crispy Dosa Night',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Iron Rich • Choice of Egg or Paneer',
+    },
+    'Friday': {
+      'breakfast': 'Ghee Pongal + Medu Vada + Sambar',
+      'lunch': 'Steamed Rice + Chole Masala + Cucumber Raita',
+      'dinner': 'Soft Rotis + Mushroom Curry + Gulab Jamun',
+      'special': 'Sweet Friday Treat',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Traditional South Indian Feast + Sweet',
+    },
+    'Saturday': {
+      'breakfast': 'Aloo Paratha + Fresh Butter + Curd + Pickle',
+      'lunch': 'South Indian Thali (Rice, Rasam, Dal, Poriyal, Appalam)',
+      'dinner': 'Veg Pulao + Mirchi Ka Salan + Onion Raita',
+      'special': 'Pulao Night',
+      'timing': '7:30 AM | 12:30 PM | 7:30 PM',
+      'nutrition': 'Wholesome Weekend Brunch & Dinner',
+    },
+    'Sunday': {
+      'breakfast': 'Chole Bhature / Onion Uttapam',
+      'lunch': 'Hyderabadi Dum Biryani (Chicken / Paneer) + Raitha + Gravy',
+      'dinner': 'Phulka + Yellow Dal Tadka + Seasonal Halwa',
+      'special': '🔥 Grand Sunday Biryani Feast',
+      'nutrition': 'Weekend Special • High Protein Biryani',
+    },
+  };
+
+  Map<String, String> _getMealForDay(String day) {
+    if (widget.foodMenu != null && widget.foodMenu![day] != null) {
+      final raw = widget.foodMenu![day] as Map<String, dynamic>;
+      return {
+        'breakfast': raw['breakfast']?.toString() ?? 'Idly + Sambar',
+        'lunch': raw['lunch']?.toString() ?? 'Rice + Dal + Veg Curry',
+        'dinner': raw['dinner']?.toString() ?? 'Chapathi + Paneer',
+        'special': raw['special']?.toString() ?? 'Chef Special',
+        'timing': raw['timing']?.toString() ?? '7:30 AM | 12:30 PM | 7:30 PM',
+        'nutrition': raw['nutrition']?.toString() ?? 'Nutritious & Fresh',
+      };
+    }
+    return _defaultWeeklyMenu[day] ?? _defaultWeeklyMenu['Monday']!;
+  }
 
   @override
   void initState() {
@@ -599,6 +689,11 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
 
                   const SizedBox(height: 30),
 
+                  // 🍽️ Weekly Food Menu Predictor
+                  _buildFoodMenuSection(),
+
+                  const SizedBox(height: 30),
+
                   // 📊 Vacancy Forecasting Section
                   Row(
                     children: [
@@ -1015,6 +1110,461 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
           Text(review.comment, style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87)),
         ],
       ),
+    );
+  }
+
+  Widget _buildFoodMenuSection() {
+    final int todayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
+    final String todayName = _weekDays[todayIndex];
+    final todayMenu = _getMealForDay(todayName);
+
+    final selectedDayName = _weekDays[_selectedFoodDayIndex];
+    final selectedMenu = _getMealForDay(selectedDayName);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.restaurant_menu, color: Colors.orange, size: 24),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Weekly Food Menu Predictor",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    "Today's meals, mess schedule & verified food rating",
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Food Rating Highlight Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFE65100), Color(0xFFF57C00)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Food Rating",
+                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            widget.foodRating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Text(
+                            " / 5.0",
+                            style: TextStyle(color: Colors.white70, fontSize: 18),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.star, color: Colors.amberAccent, size: 28),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text(
+                          "Student Verified",
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white24, height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildFoodMetric("Taste & Quality", "4.7★"),
+                  _buildFoodMetric("Kitchen Hygiene", "4.8★"),
+                  _buildFoodMetric("Refills", "Unlimited 🍚"),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Today's Menu Highlight (Highlighted Card)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.orange.shade300, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.deepOrange,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          "TODAY'S MENU",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        todayName,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(color: Colors.green.shade600, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Live Mess",
+                          style: TextStyle(color: Colors.green.shade800, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Breakfast
+              _buildMealRow(
+                icon: Icons.wb_sunny_outlined,
+                iconColor: Colors.amber.shade700,
+                mealName: "Breakfast",
+                timing: "7:30 AM - 9:30 AM",
+                food: todayMenu['breakfast']!,
+              ),
+              const Divider(height: 18),
+
+              // Lunch
+              _buildMealRow(
+                icon: Icons.wb_sunny,
+                iconColor: Colors.orange.shade700,
+                mealName: "Lunch",
+                timing: "12:30 PM - 2:30 PM",
+                food: todayMenu['lunch']!,
+              ),
+              const Divider(height: 18),
+
+              // Dinner
+              _buildMealRow(
+                icon: Icons.nightlight_round,
+                iconColor: Colors.indigo.shade600,
+                mealName: "Dinner",
+                timing: "7:30 PM - 9:30 PM",
+                food: todayMenu['dinner']!,
+              ),
+
+              if (todayMenu['special'] != null && todayMenu['special']!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stars, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Today's Special: ${todayMenu['special']}",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Weekly Menu Day Selector
+        const Text(
+          "Full Weekly Menu Schedule",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 40,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _weekDays.length,
+            itemBuilder: (context, i) {
+              final day = _weekDays[i];
+              final isSelected = _selectedFoodDayIndex == i;
+              final isToday = todayIndex == i;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(day.substring(0, 3)),
+                      if (isToday) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Colors.deepOrange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  selected: isSelected,
+                  selectedColor: Colors.orange,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black87,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() => _selectedFoodDayIndex = i);
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Selected Day Details Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "$selectedDayName Menu",
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    selectedMenu['nutrition'] ?? 'Fresh & Hygienic',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              _buildSimpleMealLine("Breakfast", selectedMenu['breakfast']!),
+              const SizedBox(height: 8),
+              _buildSimpleMealLine("Lunch", selectedMenu['lunch']!),
+              const SizedBox(height: 8),
+              _buildSimpleMealLine("Dinner", selectedMenu['dinner']!),
+              if (selectedMenu['special'] != null && selectedMenu['special']!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.orange, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Special: ${selectedMenu['special']}",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFoodMetric(String title, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          title,
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMealRow({
+    required IconData icon,
+    required Color iconColor,
+    required String mealName,
+    required String timing,
+    required String food,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    mealName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    timing,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                food,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSimpleMealLine(String mealName, String food) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            mealName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            food,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+          ),
+        ),
+      ],
     );
   }
 
