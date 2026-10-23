@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'admin@hostelhunt.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Authenticated users can read profiles (needed for manager details, chat headers, student profiles)
+      allow read: if isAuthenticated();
+      // Users can write/update their own profile doc; admins can manage any doc
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 2. Hostels Collection
+    match /hostels/{hostelId} {
+      // Publicly readable so students & guests can browse hostels, maps, and ML predictor
+      allow read: if true;
+      // Any authenticated manager or admin can create a hostel
+      allow create: if isAuthenticated();
+      // Managers can edit/delete their own hostels; admins can manage all hostels
+      allow update, delete: if isAuthenticated() && (
+        resource.data.managerId == request.auth.uid || isAdmin()
+      );
+
+      // Reviews subcollection
+      match /reviews/{reviewId} {
+        // Anyone can read reviews and sentiment breakdowns
+        allow read: if true;
+        // Authenticated students can post reviews
+        allow create: if isAuthenticated();
+        // Author or admin can update/delete reviews
+        allow update, delete: if isAuthenticated() && (
+          resource.data.studentId == request.auth.uid || isAdmin()
+        );
+      }
+    }
+
+    // 3. Chats Collection
+    match /chats/{chatId} {
+      // Authenticated participants (student & manager) can access their chats
+      allow read, create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated();
+        allow update, delete: if isAdmin();
+      }
+    }
+  }
+}
