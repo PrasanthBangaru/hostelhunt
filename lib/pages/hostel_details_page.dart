@@ -80,6 +80,7 @@ class HostelDetailsScreen extends StatefulWidget {
   final Map<String, dynamic>? foodMenu;
   final double rating;
   final int reviewCount;
+  final bool isManagerView;
 
   const HostelDetailsScreen({
     super.key,
@@ -101,6 +102,7 @@ class HostelDetailsScreen extends StatefulWidget {
     this.foodMenu,
     this.rating = 4.5,
     this.reviewCount = 0,
+    this.isManagerView = false,
   });
 
   @override
@@ -109,6 +111,16 @@ class HostelDetailsScreen extends StatefulWidget {
 
 class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
   final Set<String> _selectedExtraFacilities = {};
+
+  bool get _canEditPhotos {
+    if (widget.isManagerView) return true;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return false;
+    if (widget.managerId != null && widget.managerId!.isNotEmpty && widget.managerId != 'default_manager') {
+      return currentUid == widget.managerId;
+    }
+    return false;
+  }
 
   int get totalPrice {
     int total = widget.price;
@@ -497,6 +509,73 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
     return spots;
   }
 
+  Future<void> _requestToJoin() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to request joining.')));
+      return;
+    }
+    String studentName = user.displayName ?? '';
+    if (studentName.trim().isEmpty) {
+      try {
+        final uDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (uDoc.exists) {
+          studentName = (uDoc.data()?['name'] ?? uDoc.data()?['displayName'] ?? '').toString();
+        }
+      } catch (_) {}
+    }
+    if (studentName.trim().isEmpty) {
+      studentName = user.email?.split('@').first ?? 'Student';
+    }
+
+    final TextEditingController notesCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request to Join Hostel'),
+        content: TextField(
+          controller: notesCtrl,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Optional message to manager',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final BuildContext innerContext = ctx;
+              final notes = notesCtrl.text.trim();
+              await FirebaseFirestore.instance.collection('join_requests').add({
+                'hostelId': widget.hostelId,
+                'hostelName': widget.hostelName,
+                'managerId': widget.managerId ?? '',
+                'studentId': user.uid,
+                'studentEmail': user.email ?? '',
+                'studentName': studentName,
+                'monthlyRent': widget.price,
+                'status': 'pending',
+                'createdAt': FieldValue.serverTimestamp(),
+                'notes': notes,
+              });
+              if (!mounted) return;
+              Navigator.of(innerContext).pop();
+            },
+            child: const Text('Send Request'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Join request sent.')));
+  }
+
+
+  
+
   @override
   Widget build(BuildContext context) {
     final forecastSpots = _generateVacancyForecast();
@@ -540,20 +619,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           fit: BoxFit.cover,
                         ),
                 ),
-                Positioned(
-                  bottom: 10,
-                  right: 10,
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white,
-                    radius: 25,
-                    child: _isUploading
-                        ? const CircularProgressIndicator()
-                        : IconButton(
-                            icon: const Icon(Icons.camera_alt, color: Colors.blue),
-                            onPressed: _pickAndUploadImage,
-                          ),
-                  ),
-                ),
+
                 if (_mlModelTrained)
                   Positioned(
                     top: 12,
@@ -1156,7 +1222,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         final user = FirebaseAuth.instance.currentUser;
                         if (user == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1164,7 +1230,17 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           );
                           return;
                         }
-                        if (user.uid == widget.managerId) {
+                        String effectiveManagerId = widget.managerId ?? '';
+                        if (effectiveManagerId.isEmpty || effectiveManagerId == "default_manager") {
+                          try {
+                            final hDoc = await FirebaseFirestore.instance.collection('hostels').doc(widget.hostelId).get();
+                            if (hDoc.exists) {
+                              effectiveManagerId = hDoc.data()?['managerId'] ?? hDoc.data()?['ownerId'] ?? effectiveManagerId;
+                            }
+                          } catch (_) {}
+                        }
+                        if (!mounted) return;
+                        if (user.uid == effectiveManagerId && effectiveManagerId.isNotEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("You are the manager of this hostel.")),
                           );
@@ -1176,7 +1252,7 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                             builder: (_) => ChatScreen(
                               hostelId: widget.hostelId,
                               hostelName: widget.hostelName,
-                              managerId: widget.managerId ?? "default_manager",
+                              managerId: effectiveManagerId.isNotEmpty ? effectiveManagerId : "default_manager",
                               originalPrice: widget.price,
                             ),
                           ),
@@ -1191,7 +1267,24 @@ class _HostelDetailsScreenState extends State<HostelDetailsScreen> {
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 12),
+                  SizedBox(
+  width: double.infinity,
+  height: 55,
+  child: ElevatedButton(
+    onPressed: _requestToJoin,
+    style: ElevatedButton.styleFrom(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      backgroundColor: Colors.green,
+      foregroundColor: Colors.white,
+    ),
+    child: const Text(
+      "Request to Join",
+      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    ),
+  ),
+),
+const SizedBox(height: 30),
                 ],
               ),
             ),

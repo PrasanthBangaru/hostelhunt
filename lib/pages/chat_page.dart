@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,7 @@ class ChatScreen extends StatefulWidget {
   final String managerId;
   final int originalPrice;
   final String? studentId; // null when student opens (uses current user)
+  final String? chatId; // optional explicit chat room ID
 
   const ChatScreen({
     super.key,
@@ -16,6 +18,7 @@ class ChatScreen extends StatefulWidget {
     required this.managerId,
     required this.originalPrice,
     this.studentId,
+    this.chatId,
   });
 
   @override
@@ -28,32 +31,102 @@ class _ChatScreenState extends State<ChatScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late String chatId;
   bool _isLoading = true;
+  StreamSubscription<DocumentSnapshot>? _chatSubscription;
 
   String _dealStatus = 'none';
   int? _currentOfferPrice;
+  String? _studentName;
+  String? _managerName;
+  String _effectiveManagerId = '';
+  String _effectiveStudentId = '';
 
   @override
   void initState() {
     super.initState();
-    final user = _auth.currentUser;
-    if (user != null) {
-      // Build unique chat room ID — always studentId_managerId_hostelId
-      final studentId = widget.studentId ?? user.uid;
-      chatId = "${studentId}_${widget.managerId}_${widget.hostelId}";
-      _ensureChatDocExists().then((_) {
-        if (mounted) setState(() => _isLoading = false);
-      });
+    _initChat();
+  }
 
-      FirebaseFirestore.instance.collection('chats').doc(chatId).snapshots().listen((snap) {
-        if (snap.exists && mounted) {
-          final data = snap.data() as Map<String, dynamic>;
-          setState(() {
-            _dealStatus = data['dealStatus'] ?? 'none';
-            _currentOfferPrice = data['currentOfferPrice'] as int?;
-          });
-        }
-      });
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _chatSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initChat() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
     }
+
+    _effectiveManagerId = widget.managerId;
+    if (_effectiveManagerId.isEmpty || _effectiveManagerId == 'default_manager') {
+      try {
+        final hDoc = await FirebaseFirestore.instance.collection('hostels').doc(widget.hostelId).get();
+        if (hDoc.exists) {
+          _effectiveManagerId = hDoc.data()?['managerId'] ?? hDoc.data()?['ownerId'] ?? _effectiveManagerId;
+        }
+      } catch (_) {}
+    }
+
+    final isManager = user.uid == _effectiveManagerId;
+
+    // Student ID resolution:
+    // If manager opened: studentId MUST come from widget.studentId or widget.chatId, never manager's own uid
+    if (widget.studentId != null && widget.studentId!.isNotEmpty) {
+      _effectiveStudentId = widget.studentId!;
+    } else if (!isManager) {
+      _effectiveStudentId = user.uid;
+    } else if (widget.chatId != null && widget.chatId!.contains('_')) {
+      _effectiveStudentId = widget.chatId!.split('_').first;
+    } else {
+      _effectiveStudentId = '';
+    }
+
+    if (widget.chatId != null && widget.chatId!.isNotEmpty) {
+      chatId = widget.chatId!;
+    } else {
+      chatId = "${_effectiveStudentId}_${_effectiveManagerId}_${widget.hostelId}";
+    }
+
+    await _ensureChatDocExists();
+
+    // Mark as read for current viewer
+    if (isManager) {
+      FirebaseFirestore.instance.collection('chats').doc(chatId).update({'unreadByManager': false}).catchError((_) {});
+    } else {
+      FirebaseFirestore.instance.collection('chats').doc(chatId).update({'unreadByStudent': false}).catchError((_) {});
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    _chatSubscription = FirebaseFirestore.instance.collection('chats').doc(chatId).snapshots().listen((snap) {
+      if (snap.exists && mounted) {
+        final data = snap.data() as Map<String, dynamic>;
+        if (data['lastSenderId'] != null && data['lastSenderId'] != user.uid) {
+          if (isManager && data['unreadByManager'] == true) {
+            FirebaseFirestore.instance.collection('chats').doc(chatId).update({'unreadByManager': false}).catchError((_) {});
+          } else if (!isManager && data['unreadByStudent'] == true) {
+            FirebaseFirestore.instance.collection('chats').doc(chatId).update({'unreadByStudent': false}).catchError((_) {});
+          }
+        }
+        setState(() {
+          _dealStatus = data['dealStatus'] ?? 'none';
+          _currentOfferPrice = data['currentOfferPrice'] as int?;
+          if (data['studentName'] != null) _studentName = data['studentName'];
+          if (data['managerName'] != null) _managerName = data['managerName'];
+          if (_effectiveStudentId.isEmpty && data['studentId'] != null) {
+            _effectiveStudentId = data['studentId'];
+          }
+          if (_effectiveManagerId.isEmpty && data['managerId'] != null) {
+            _effectiveManagerId = data['managerId'];
+          }
+        });
+      }
+    });
   }
 
   Future<void> _ensureChatDocExists() async {
@@ -67,25 +140,29 @@ class _ChatScreenState extends State<ChatScreen> {
       String studentName = "Student";
       String managerName = "Manager";
 
-      try {
-        final studentDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        if (studentDoc.exists) {
-          studentName = studentDoc.data()?['name'] ?? "Student";
-        }
-      } catch (_) {}
+      if (_effectiveStudentId.isNotEmpty) {
+        try {
+          final studentDoc = await FirebaseFirestore.instance.collection('users').doc(_effectiveStudentId).get();
+          if (studentDoc.exists) {
+            studentName = studentDoc.data()?['name'] ?? "Student";
+          }
+        } catch (_) {}
+      }
 
-      try {
-        final managerDoc = await FirebaseFirestore.instance.collection('users').doc(widget.managerId).get();
-        if (managerDoc.exists) {
-          managerName = managerDoc.data()?['name'] ?? "Manager";
-        }
-      } catch (_) {}
+      if (_effectiveManagerId.isNotEmpty) {
+        try {
+          final managerDoc = await FirebaseFirestore.instance.collection('users').doc(_effectiveManagerId).get();
+          if (managerDoc.exists) {
+            managerName = managerDoc.data()?['name'] ?? "Manager";
+          }
+        } catch (_) {}
+      }
 
       await docRef.set({
         'chatId': chatId,
-        'studentId': user.uid,
+        'studentId': _effectiveStudentId,
         'studentName': studentName,
-        'managerId': widget.managerId,
+        'managerId': _effectiveManagerId,
         'managerName': managerName,
         'hostelId': widget.hostelId,
         'hostelName': widget.hostelName,
@@ -96,6 +173,18 @@ class _ChatScreenState extends State<ChatScreen> {
         'offerSenderId': null,
         'dealStatus': 'none',
       });
+      _studentName = studentName;
+      _managerName = managerName;
+    } else {
+      final data = docSnap.data();
+      _studentName = data?['studentName'];
+      _managerName = data?['managerName'];
+      if (_effectiveStudentId.isEmpty && data?['studentId'] != null) {
+        _effectiveStudentId = data?['studentId'];
+      }
+      if (_effectiveManagerId.isEmpty && data?['managerId'] != null) {
+        _effectiveManagerId = data?['managerId'];
+      }
     }
   }
 
@@ -132,7 +221,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .doc(msgData['messageId'] as String);
     batch.set(msgRef, msgData);
 
-    // Update last message
+    final isManager = user.uid == _effectiveManagerId || user.uid == widget.managerId;
     final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
     Map<String, dynamic> updateData = {
       'lastMessage': type == 'offer'
@@ -143,6 +232,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? "❌ Offer declined"
                   : text,
       'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastSenderId': user.uid,
+      'lastSenderName': senderName,
+      'unreadByManager': !isManager,
+      'unreadByStudent': isManager,
     };
 
     if (type == 'offer') {
@@ -266,14 +359,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final user = _auth.currentUser;
-    final isManager = user?.uid == widget.managerId;
+    final isManager = user?.uid == _effectiveManagerId || user?.uid == widget.managerId;
 
     return Scaffold(
       appBar: AppBar(
         title: Column(
           children: [
             Text(widget.hostelName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(isManager ? "Student Negotiations" : "Hostel Manager", style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            Text(
+              isManager
+                  ? (_studentName != null ? "Student: $_studentName" : "Student Negotiations")
+                  : (_managerName != null ? "Hostel Manager: $_managerName" : "Hostel Manager"),
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
           ],
         ),
         actions: [

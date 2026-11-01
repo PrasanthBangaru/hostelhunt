@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'edit_hostel_page.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ManageHostelScreen extends StatefulWidget {
   const ManageHostelScreen({super.key});
@@ -12,6 +15,8 @@ class ManageHostelScreen extends StatefulWidget {
 
 class _ManageHostelScreenState extends State<ManageHostelScreen> {
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+  bool _isUploading = false;
+  String? _uploadingHostelId;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +110,13 @@ class _ManageHostelScreenState extends State<ManageHostelScreen> {
                         },
                       ),
                       IconButton(
+                        icon: const Icon(Icons.camera_alt, color: Colors.orange),
+                        tooltip: "Update Hostel Photo",
+                        onPressed: _isUploading && _uploadingHostelId == hostel.id
+                            ? null
+                            : () => _pickAndUploadImage(hostel.id),
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () async {
                           final confirm = await showDialog<bool>(
@@ -147,7 +159,34 @@ class _ManageHostelScreenState extends State<ManageHostelScreen> {
         },
       ),
     );
+    }
+
+  Future<void> _pickAndUploadImage(String hostelId) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    setState(() {
+      _isUploading = true;
+      _uploadingHostelId = hostelId;
+    });
+    try {
+      final file = File(picked.path);
+      final storageRef = FirebaseStorage.instance.ref().child('hostel_images').child('$hostelId.jpg');
+      final uploadTask = storageRef.putFile(file);
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      await FirebaseFirestore.instance.collection('hostels').doc(hostelId).update({'imageUrl': downloadUrl});
+    } catch (e) {
+      // Optionally handle error, e.g., show a snackbar
+      debugPrint('Error uploading image: $e');
+    } finally {
+      setState(() {
+        _isUploading = false;
+        _uploadingHostelId = null;
+      });
+    }
   }
 }
+
 
 typedef ManageHostelPage = ManageHostelScreen;

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as lat_lng;
@@ -6,6 +7,8 @@ import 'student_profile_page.dart';
 import 'hostel_details_page.dart';
 import 'price_predictor_page.dart';
 import 'ai_chatbot_page.dart';
+import 'chat_page.dart';
+import 'chat_notifications_page.dart';
 
 class _HostelModel {
   String? hostelId;
@@ -525,6 +528,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   double _maxPrice = 25000.0;
   bool _showFilters = false;
 
+  // Approved hostel state
+  bool _showAllHostels = false; // student can toggle back to browse
+
+  String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
+
+  Stream<QuerySnapshot> get _approvedRequestStream =>
+      FirebaseFirestore.instance
+          .collection('join_requests')
+          .where('studentId', isEqualTo: _currentUid)
+          .where('status', isEqualTo: 'accepted')
+          .limit(1)
+          .snapshots();
+
   @override
   void initState() {
     super.initState();
@@ -533,11 +549,37 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return StreamBuilder<QuerySnapshot>(
+      stream: _approvedRequestStream,
+      builder: (context, approvalSnapshot) {
+        final hasApproved = approvalSnapshot.hasData &&
+            approvalSnapshot.data!.docs.isNotEmpty;
+        final approvedData = hasApproved
+            ? approvalSnapshot.data!.docs.first.data() as Map<String, dynamic>
+            : null;
+
+        // If approved and student hasn't chosen to browse all
+        if (hasApproved && !_showAllHostels) {
+          return _buildApprovedHostelView(approvedData!);
+        }
+
+        return Scaffold(
       appBar: AppBar(
         title: const Text("HostelHunt"),
         centerTitle: true,
         actions: [
+          // Show "My Hostel" chip if approved
+          if (hasApproved)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showAllHostels = false),
+                icon: const Icon(Icons.home, size: 16, color: Colors.green),
+                label: const Text("My Hostel",
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          const ChatNotificationButton(isManager: false),
           IconButton(
             icon: Icon(_isMapView ? Icons.format_list_bulleted : Icons.map_outlined),
             tooltip: _isMapView ? 'List View' : 'Map View',
@@ -1152,7 +1194,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         foregroundColor: Colors.white,
       ),
     );
-  }
+      }, // end Scaffold StreamBuilder builder
+    ); // end outer approval StreamBuilder
+  } // end build()
 
   Widget _buildFullMapView(List<Map<String, dynamic>> hostels) {
     List<Marker> mapMarkers = [];
@@ -1377,6 +1421,249 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  } // end _buildFullMapView
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // MY HOSTEL VIEW – shown when the student's join request is approved
+  // ────────────────────────────────────────────────────────────────────────────
+  Widget _buildApprovedHostelView(Map<String, dynamic> req) {
+    final hostelId   = req['hostelId']?.toString() ?? '';
+    final hostelName = req['hostelName']?.toString() ?? 'Your Hostel';
+    final managerId  = req['managerId']?.toString() ?? '';
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('hostels')
+          .doc(hostelId)
+          .snapshots(),
+      builder: (context, snap) {
+        final hostelData = snap.data?.data() as Map<String, dynamic>?;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF0F7FF),
+          appBar: AppBar(
+            backgroundColor: Colors.green.shade700,
+            foregroundColor: Colors.white,
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('My Hostel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(hostelName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400)),
+              ],
+            ),
+            actions: [
+              const ChatNotificationButton(isManager: false, iconColor: Colors.white),
+              TextButton.icon(
+                onPressed: () => setState(() => _showAllHostels = true),
+                icon: const Icon(Icons.explore, color: Colors.white, size: 18),
+                label: const Text('View All Hostels',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Approval Banner ──────────────────────────────────────────
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade600, Colors.teal.shade500],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.green.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check_circle, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('You\'re In! 🎉',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Your join request for $hostelName has been approved by the manager.',
+                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── Hostel Details Card ───────────────────────────────────────
+                if (hostelData != null) ...[
+                  Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.apartment, color: Colors.blue.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  hostelData['hostelName'] ?? hostelName,
+                                  style: const TextStyle(
+                                      fontSize: 20, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _infoRow(Icons.school_outlined,
+                              hostelData['collegeName'] ?? ''),
+                          _infoRow(Icons.location_on_outlined,
+                              hostelData['address'] ?? ''),
+                          _infoRow(Icons.currency_rupee,
+                              '${hostelData['price'] ?? 0}/month'),
+                          _infoRow(Icons.bed_outlined,
+                              '${hostelData['vacancy'] ?? 0} vacancies left'),
+                          _infoRow(Icons.person_outlined,
+                              'Manager: ${hostelData['ownerName'] ?? ''}'),
+                          _infoRow(Icons.phone_outlined,
+                              hostelData['ownerPhone'] ?? ''),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                if (snap.connectionState == ConnectionState.waiting)
+                  const Center(child: CircularProgressIndicator()),
+
+                // ── Chat with Manager ─────────────────────────────────────────
+                Card(
+                  elevation: 4,
+                  shape:
+                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.chat_bubble, color: Colors.blue.shade700),
+                            const SizedBox(width: 8),
+                            const Text('Chat with Manager',
+                                style: TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Have questions about your stay? Chat directly with your hostel manager.',
+                          style: TextStyle(color: Colors.black54, fontSize: 13),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final resolvedManagerId = managerId.isNotEmpty
+                                  ? managerId
+                                  : (hostelData?['managerId']?.toString() ?? '');
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ChatScreen(
+                                    hostelId: hostelId,
+                                    hostelName: hostelName,
+                                    managerId: resolvedManagerId,
+                                    originalPrice:
+                                        (hostelData?['price'] as num?)?.toInt() ?? 0,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.send, color: Colors.white),
+                            label: const Text('Open Chat',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── Browse All Hostels Button ──────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() => _showAllHostels = true),
+                    icon: const Icon(Icons.explore_outlined),
+                    label: const Text('Browse All Hostels'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(text,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87))),
         ],
       ),
     );

@@ -50,7 +50,34 @@ class ManagerChatsScreen extends StatelessWidget {
             );
           }
 
-          final chats = snapshot.data!.docs;
+          final rawChats = snapshot.data!.docs;
+          // Filter out accidental self-chats where studentId == manager.uid
+          final chats = rawChats.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final studentId = data['studentId'];
+            return studentId != null && studentId != manager.uid;
+          }).toList();
+
+          if (chats.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 70, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "No negotiation chats yet.",
+                    style: TextStyle(fontSize: 16, color: Colors.black45),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Students will reach out to you to negotiate rent.",
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            );
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -158,10 +185,12 @@ class ManagerChatsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => ChatScreen(
+                          chatId: chatDoc.id,
                           hostelId: data['hostelId'] ?? '',
                           hostelName: hostelName,
-                          managerId: manager.uid,
-                          originalPrice: data['originalPrice'] ?? 0,
+                          managerId: data['managerId'] ?? manager.uid,
+                          studentId: data['studentId'],
+                          originalPrice: (data['originalPrice'] as num?)?.toInt() ?? 0,
                         ),
                       ),
                     );
