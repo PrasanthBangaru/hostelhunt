@@ -8,6 +8,8 @@ import 'admin_dashboard_page.dart';
 import 'register_page.dart';
 import 'email_verification_page.dart';
 
+import '../config/admin_config.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,8 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _secretKeyController = TextEditingController();
   String _selectedRole = "student";
   bool _isLoading = false;
-
-  static const String adminSecretKey = "HOSTELHUNT_ADMIN_2026";
 
   @override
   void dispose() {
@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // Verify secret key if admin role is selected
     if (_selectedRole == "admin") {
       final secretKeyInput = _secretKeyController.text.trim();
-      if (secretKeyInput != adminSecretKey) {
+      if (!AdminConfig.validateSecretKey(secretKeyInput)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Invalid Admin Secret Key! Access denied."),

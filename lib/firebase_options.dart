@@ -11,7 +11,7 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError('Android target options not configured.');
+        return android;
       case TargetPlatform.iOS:
         throw UnsupportedError('iOS target options not configured.');
       case TargetPlatform.macOS:
@@ -35,5 +35,13 @@ class DefaultFirebaseOptions {
     authDomain: 'hostelhunt-new.firebaseapp.com',
     storageBucket: 'hostelhunt-new.firebasestorage.app',
     measurementId: 'G-6T75DB966N',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDVdM-ZP-g0_0hGXfN7xzv_J0HLi1G2_II',
+    appId: '1:358017061711:android:4a629e5246784cb6d42b3a',
+    messagingSenderId: '358017061711',
+    projectId: 'hostelhunt-new',
+    storageBucket: 'hostelhunt-new.firebasestorage.app',
   );
 }

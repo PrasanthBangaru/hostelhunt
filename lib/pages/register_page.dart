@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'email_verification_page.dart';
+import '../config/admin_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,8 +23,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedRole = "student"; // Default role
   bool _isLoading = false;
 
-  static const String adminSecretKey = "HOSTELHUNT_ADMIN_2026";
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -43,7 +42,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Validate Admin Secret Key if Admin role is selected
     if (_selectedRole == "admin") {
       final inputKey = _secretKeyController.text.trim();
-      if (inputKey != adminSecretKey) {
+      if (!AdminConfig.validateSecretKey(inputKey)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Invalid Secret Key! Contact administrator for the key."),

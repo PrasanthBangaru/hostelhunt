@@ -334,7 +334,18 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.camera_alt),
+        label: const Text('Update Photo'),
+        tooltip: 'Quickly manage hostel photos',
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManageHostelScreen()),
+          );
+        },
+      ),
+      );
   }
 }
 
