@@ -27,7 +27,6 @@ class _HostelData {
   });
 
   factory _HostelData.fromMap(Map<String, dynamic> map) {
-    // Calculate effective price taking into account facility costs if present
     int basePrice = (map['price'] as num?)?.toInt() ?? 5000;
     int extraTotal = 0;
     final costs = map['facilityCosts'];
@@ -77,14 +76,6 @@ class _HostelData {
 }
 
 /// Advanced Machine Learning Price Service with Monotonic Constraints.
-///
-/// Features:
-/// 1. Monotonicity: Learned weights for amenities are constrained so adding any
-///    facility (Wi-Fi, Food, AC, Laundry, etc.) strictly increases or maintains rent.
-/// 2. Location-Based: Dynamic locality and city premium adjustments learned from actual records.
-/// 3. Distance-Based: Monotonic negative slope (closer to college = higher rent).
-/// 4. Category & Room-sharing: Accommodates Boys/Girls/Co-Ed and room-sharing differences.
-/// 5. Evaluation Metrics: Computes real-time MAE, RMSE, and R² on local dataset.
 class _MLPriceService {
   static final _MLPriceService _instance = _MLPriceService._internal();
   factory _MLPriceService() => _instance;
@@ -123,29 +114,243 @@ class _MLPriceService {
     'Refrigerator': 500.0,
   };
 
+  // City baseline market differentials
+  final Map<String, double> cityWeights = {
+    'Mumbai': 1800.0,
+    'Bangalore': 1200.0,
+    'Delhi NCR': 1000.0,
+    'Hyderabad': 600.0,
+    'Pune': 400.0,
+    'Chennai': 300.0,
+    'Kolkata': -200.0,
+    'Ahmedabad': -300.0,
+  };
+
+  // Comprehensive city-wise localities catalog
+  final Map<String, List<String>> cityLocalities = {
+    'Hyderabad': [
+      'Gachibowli',
+      'Madhapur',
+      'Hitec City',
+      'Kondapur',
+      'Kukatpally',
+      'KPHB Colony',
+      'Ameerpet',
+      'SR Nagar',
+      'Dilsukhnagar',
+      'Miyapur',
+      'Begumpet',
+      'Banjara Hills',
+      'Jubilee Hills',
+      'Mehdipatnam',
+      'Uppal',
+      'Secunderabad',
+      'Tarnaka',
+      'Lingampally',
+      'General / Other',
+    ],
+    'Bangalore': [
+      'Koramangala',
+      'Indiranagar',
+      'HSR Layout',
+      'BTM Layout',
+      'Whitefield',
+      'Electronic City',
+      'Marathahalli',
+      'JP Nagar',
+      'Jayanagar',
+      'Bellandur',
+      'Yelahanka',
+      'Hebbal',
+      'Rajajinagar',
+      'Malleshwaram',
+      'General / Other',
+    ],
+    'Pune': [
+      'Hinjewadi',
+      'Kothrud',
+      'Viman Nagar',
+      'Wakad',
+      'Baner',
+      'Shivajinagar',
+      'Aundh',
+      'Hadapsar',
+      'Kalyani Nagar',
+      'Pashan',
+      'Pimpri-Chinchwad',
+      'General / Other',
+    ],
+    'Delhi NCR': [
+      'North Campus (DU)',
+      'South Campus',
+      'Laxmi Nagar',
+      'Mukherjee Nagar',
+      'Hauz Khas',
+      'Saket',
+      'Noida Sector 62',
+      'Noida Sector 15',
+      'Knowledge Park (Greater Noida)',
+      'Gurgaon Cyber City',
+      'DLF Phase 3',
+      'General / Other',
+    ],
+    'Chennai': [
+      'Guindy',
+      'Velachery',
+      'OMR (IT Corridor)',
+      'T. Nagar',
+      'Adyar',
+      'Tambaram',
+      'Anna Nagar',
+      'Porur',
+      'Thiruvanmiyur',
+      'Sholinganallur',
+      'General / Other',
+    ],
+    'Mumbai': [
+      'Andheri West',
+      'Andheri East',
+      'Powai (IIT)',
+      'Bandra West',
+      'Vile Parle',
+      'Dadar',
+      'Borivali',
+      'Ghatkopar',
+      'Navi Mumbai (Vashi)',
+      'Thane West',
+      'General / Other',
+    ],
+    'Kolkata': [
+      'Salt Lake (Sector V)',
+      'New Town',
+      'Park Street',
+      'Gariahat',
+      'Jadavpur',
+      'Howrah',
+      'Dum Dum',
+      'General / Other',
+    ],
+    'Ahmedabad': [
+      'Navrangpura',
+      'Vastrapur',
+      'Satellite',
+      'SG Highway',
+      'Bodakdev',
+      'Maninagar',
+      'Gandhinagar',
+      'General / Other',
+    ],
+  };
+
   // Locality premium relative to city baseline
   final Map<String, double> localityWeights = {
+    // Hyderabad
     'Gachibowli': 800.0,
     'Madhapur': 1200.0,
     'Hitec City': 1500.0,
     'Kondapur': 700.0,
-    'Ameerpet': -300.0,
+    'Banjara Hills': 1600.0,
+    'Jubilee Hills': 1800.0,
+    'Begumpet': 500.0,
     'Kukatpally': -200.0,
+    'KPHB Colony': -100.0,
+    'Ameerpet': -300.0,
+    'SR Nagar': -350.0,
+    'Miyapur': -400.0,
     'Dilsukhnagar': -600.0,
-    'General': 0.0,
+    'Mehdipatnam': -250.0,
+    'Uppal': -500.0,
+    'Secunderabad': -100.0,
+    'Tarnaka': -200.0,
+    'Lingampally': -250.0,
+    // Bangalore
+    'Koramangala': 1600.0,
+    'Indiranagar': 1800.0,
+    'HSR Layout': 1100.0,
+    'BTM Layout': 200.0,
+    'Whitefield': 700.0,
+    'Electronic City': 100.0,
+    'Marathahalli': 400.0,
+    'JP Nagar': 300.0,
+    'Jayanagar': 500.0,
+    'Bellandur': 900.0,
+    'Yelahanka': -200.0,
+    'Hebbal': 400.0,
+    'Rajajinagar': 200.0,
+    'Malleshwaram': 400.0,
+    // Pune
+    'Hinjewadi': 700.0,
+    'Kothrud': 300.0,
+    'Viman Nagar': 600.0,
+    'Wakad': 400.0,
+    'Baner': 600.0,
+    'Shivajinagar': 500.0,
+    'Aundh': 500.0,
+    'Hadapsar': 200.0,
+    'Kalyani Nagar': 800.0,
+    'Pashan': 200.0,
+    'Pimpri-Chinchwad': -200.0,
+    // Delhi NCR
+    'North Campus (DU)': 600.0,
+    'South Campus': 700.0,
+    'Laxmi Nagar': -400.0,
+    'Mukherjee Nagar': -300.0,
+    'Hauz Khas': 1500.0,
+    'Saket': 900.0,
+    'Noida Sector 62': 200.0,
+    'Noida Sector 15': 100.0,
+    'Knowledge Park (Greater Noida)': -300.0,
+    'Gurgaon Cyber City': 1700.0,
+    'DLF Phase 3': 1200.0,
+    // Chennai
+    'Guindy': 400.0,
+    'Velachery': 300.0,
+    'OMR (IT Corridor)': 600.0,
+    'T. Nagar': 700.0,
+    'Adyar': 800.0,
+    'Tambaram': -300.0,
+    'Anna Nagar': 600.0,
+    'Porur': 100.0,
+    'Thiruvanmiyur': 700.0,
+    'Sholinganallur': 300.0,
+    // Mumbai
+    'Andheri West': 1500.0,
+    'Andheri East': 900.0,
+    'Powai (IIT)': 2000.0,
+    'Bandra West': 2500.0,
+    'Vile Parle': 1400.0,
+    'Dadar': 1200.0,
+    'Borivali': 200.0,
+    'Ghatkopar': 400.0,
+    'Navi Mumbai (Vashi)': -100.0,
+    'Thane West': 0.0,
+    // Kolkata
+    'Salt Lake (Sector V)': 500.0,
+    'New Town': 400.0,
+    'Park Street': 1000.0,
+    'Gariahat': 300.0,
+    'Jadavpur': -200.0,
+    'Howrah': -400.0,
+    'Dum Dum': -300.0,
+    // Ahmedabad
+    'Navrangpura': 300.0,
+    'Vastrapur': 400.0,
+    'Satellite': 300.0,
+    'SG Highway': 400.0,
+    'Bodakdev': 500.0,
+    'Maninagar': -200.0,
+    'Gandhinagar': 100.0,
+    'General / Other': 0.0,
   };
 
-  // Dynamic discovered vocabularies
-  List<String> cities = ['Hyderabad', 'Bangalore', 'Pune', 'Chennai'];
-  List<String> localities = [
-    'Gachibowli',
-    'Madhapur',
-    'Hitec City',
-    'Kondapur',
-    'Kukatpally',
-    'Ameerpet',
-    'General',
-  ];
+  List<String> get cities => cityLocalities.keys.toList();
+
+  List<String> getLocalitiesForCity(String city) {
+    if (cityLocalities.containsKey(city)) {
+      return cityLocalities[city]!;
+    }
+    return cityLocalities['Hyderabad']!;
+  }
 
   // Evaluation Metrics
   double mae = 380.0;
@@ -160,14 +365,14 @@ class _MLPriceService {
     trainingSamplesCount = hostels.length;
 
     // Discover dynamic cities and localities from dataset
-    final dynamicCities = hostels.map((h) => h.city).where((c) => c.isNotEmpty && c != 'Unknown').toSet();
-    for (var c in dynamicCities) {
-      if (!cities.contains(c)) cities.insert(0, c);
-    }
-
-    final dynamicLocalities = hostels.map((h) => h.locality).where((l) => l.isNotEmpty && l != 'Unknown').toSet();
-    for (var l in dynamicLocalities) {
-      if (!localities.contains(l)) localities.insert(0, l);
+    for (var h in hostels) {
+      if (h.city.isNotEmpty && h.city != 'Unknown') {
+        if (!cityLocalities.containsKey(h.city)) {
+          cityLocalities[h.city] = [h.locality, 'General / Other'];
+        } else if (!cityLocalities[h.city]!.contains(h.locality)) {
+          cityLocalities[h.city]!.insert(0, h.locality);
+        }
+      }
     }
 
     // 1. Locality premium estimation with empirical Bayes shrinkage
@@ -178,7 +383,6 @@ class _MLPriceService {
     double overallMean = hostels.map((h) => h.price.toDouble()).reduce((a, b) => a + b) / hostels.length;
     locGroups.forEach((loc, pList) {
       double locMean = pList.reduce((a, b) => a + b) / pList.length;
-      // Shrinkage towards overall mean for stability with small samples
       double weight = pList.length / (pList.length + 2.0);
       localityWeights[loc] = (locMean - overallMean) * weight;
     });
@@ -219,13 +423,9 @@ class _MLPriceService {
       }
 
       basePrice -= (lr * baseGrad) / n;
-      // Monotonic constraint on distance: must be non-positive (closer is more expensive)
       distWeight = min(-100.0, distWeight - (lr * distGrad) / n);
-      // Monotonic constraint on rating: higher rating increases rent
       ratingWeight = max(150.0, ratingWeight - (lr * ratingGrad) / n);
 
-      // Monotonic constraint on facilities:
-      // Minimum lower bound strictly enforced so adding ANY facility increases rent!
       facGrads.forEach((f, grad) {
         double current = facilityWeights[f] ?? 300.0;
         double minBound = (f == 'Food' || f == 'AC' || f == 'Single Room') ? 1200.0 : 200.0;
@@ -275,24 +475,29 @@ class _MLPriceService {
   }) {
     double price = basePrice;
 
-    // 1. Locality effect
+    // 1. City baseline premium
+    if (cityWeights.containsKey(city)) {
+      price += cityWeights[city]!;
+    }
+
+    // 2. Locality effect
     if (localityWeights.containsKey(locality)) {
       price += localityWeights[locality]!;
     }
 
-    // 2. Distance effect: closer to college is more expensive
+    // 3. Distance effect: closer to college is more expensive
     price += distWeight * (distanceFromCollege - 1.5);
 
-    // 3. Rating effect: higher rating increases price
+    // 4. Rating effect: higher rating increases price
     price += ratingWeight * (rating - 3.5);
 
-    // 4. Hostel Category effect
+    // 5. Hostel Category effect
     price += typeWeights[hostelType] ?? 0.0;
 
-    // 5. Room Sharing type effect
+    // 6. Room Sharing type effect
     price += sharingWeights[roomSharing] ?? 0.0;
 
-    // 6. Monotonic Facility effect: Every added facility strictly increases price
+    // 7. Monotonic Facility effect: Every added facility strictly increases price
     for (var f in facilities) {
       price += facilityWeights[f] ?? 350.0;
     }
@@ -361,12 +566,12 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
         setState(() {
           _hostelsCount = hostels.length;
           _isTraining = false;
-          // Match selected city/locality with discovered values if possible
-          if (_mlService.cities.isNotEmpty && !_mlService.cities.contains(_selectedCity)) {
+          if (!_mlService.cities.contains(_selectedCity)) {
             _selectedCity = _mlService.cities.first;
           }
-          if (_mlService.localities.isNotEmpty && !_mlService.localities.contains(_selectedLocality)) {
-            _selectedLocality = _mlService.localities.first;
+          final locs = _mlService.getLocalitiesForCity(_selectedCity);
+          if (!locs.contains(_selectedLocality)) {
+            _selectedLocality = locs.first;
           }
         });
         _updatePrediction();
@@ -402,6 +607,8 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentLocalities = _mlService.getLocalitiesForCity(_selectedCity);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -511,7 +718,7 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
                               Icon(Icons.location_on_outlined, color: Colors.blue.shade700, size: 22),
                               const SizedBox(width: 8),
                               const Text(
-                                "Location & Locality",
+                                "Select City & Locality",
                                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                               ),
                             ],
@@ -524,7 +731,7 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text("City", style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.black87)),
+                                    const Text("City", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87)),
                                     const SizedBox(height: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -537,12 +744,19 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
                                         child: DropdownButton<String>(
                                           value: _mlService.cities.contains(_selectedCity) ? _selectedCity : _mlService.cities.first,
                                           isExpanded: true,
+                                          menuMaxHeight: 350,
                                           items: _mlService.cities.map((city) {
                                             return DropdownMenuItem(value: city, child: Text(city, style: const TextStyle(fontSize: 14)));
                                           }).toList(),
                                           onChanged: (val) {
                                             if (val != null) {
-                                              setState(() => _selectedCity = val);
+                                              setState(() {
+                                                _selectedCity = val;
+                                                final locs = _mlService.getLocalitiesForCity(val);
+                                                if (!locs.contains(_selectedLocality)) {
+                                                  _selectedLocality = locs.first;
+                                                }
+                                              });
                                               _updatePrediction();
                                             }
                                           },
@@ -558,7 +772,7 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text("Locality", style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.black87)),
+                                    const Text("Locality", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87)),
                                     const SizedBox(height: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -569,9 +783,12 @@ class _PricePredictorScreenState extends State<PricePredictorScreen> {
                                       ),
                                       child: DropdownButtonHideUnderline(
                                         child: DropdownButton<String>(
-                                          value: _mlService.localities.contains(_selectedLocality) ? _selectedLocality : _mlService.localities.first,
+                                          value: currentLocalities.contains(_selectedLocality)
+                                              ? _selectedLocality
+                                              : currentLocalities.first,
                                           isExpanded: true,
-                                          items: _mlService.localities.map((loc) {
+                                          menuMaxHeight: 350,
+                                          items: currentLocalities.map((loc) {
                                             return DropdownMenuItem(value: loc, child: Text(loc, style: const TextStyle(fontSize: 14)));
                                           }).toList(),
                                           onChanged: (val) {
